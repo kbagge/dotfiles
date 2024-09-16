@@ -1,0 +1,65 @@
+# Bootstrap znap package manager - remember to 
+[[ -r ~/Builds/znap/znap.zsh ]] ||
+   git clone --depth 1 -- https://github.com/marlonrichert/zsh-snap.git ~/Builds/znap
+source ~/Builds/znap/znap.zsh  # Start Znap
+
+# The same goes for any other kind of custom prompt:
+znap eval starship 'starship init zsh --print-full-init'
+znap prompt
+
+# `znap source` starts plugins. Autocomplete with tab or C-n, C-f ...
+znap source marlonrichert/zsh-autocomplete
+
+# Suggest entire commands with arguments based on history
+znap source zsh-users/zsh-autosuggestions
+
+# Add some colors to make it more readable
+znap source zsh-users/zsh-syntax-highlighting
+
+# `znap install` adds new commands and completions.
+znap install aureliojargas/clitest zsh-users/zsh-completions
+
+source $ZDOTDIR/config.zsh
+
+# Don't beep
+unsetopt beep
+
+# Use emacs bindings
+bindkey -e
+# Make home end etc work in zsh:
+source $ZDOTDIR/keybindings.zsh
+# Alias
+source $ZDOTDIR/aliases.zsh
+
+# Add common env variables to zsh:
+export $(envsubst < ~/.env)
+
+# For gpg yubikey to work.
+# export GPG_TTY="$(tty)"
+# export SSH_AUTH_SOCK=$(gpgconf --list-dirs agent-ssh-socket)
+# gpg-connect-agent updatestartuptty /bye > /dev/null 
+# export SSH_AGENT_PID=
+
+# For pixi completions
+eval "$(pixi completion --shell zsh)"
+
+# Add pixi, emacs and .local/bin to path
+export PATH="/home/bagge/.pixi/bin:/home/bagge/.local/bin:$PATH"
+
+
+eval "$(direnv hook zsh)"
+
+
+# For support with vterm emacs:
+# https://github.com/akermu/emacs-libvterm?tab=readme-ov-file#shell-side-configuration
+vterm_printf() {
+    if [ -n "$TMUX" ] && ([ "${TERM%%-*}" = "tmux" ] || [ "${TERM%%-*}" = "screen" ]); then
+        # Tell tmux to pass the escape sequences through
+        printf "\ePtmux;\e\e]%s\007\e\\" "$1"
+    elif [ "${TERM%%-*}" = "screen" ]; then
+        # GNU screen (screen, screen-256color, screen-256color-bce)
+        printf "\eP\e]%s\007\e\\" "$1"
+    else
+        printf "\e]%s\e\\" "$1"
+    fi
+}

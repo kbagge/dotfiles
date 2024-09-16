@@ -1,0 +1,15 @@
+[user]
+  name = Kristian Bagge
+  email = mail@kristianbagge.com
+  signingkey = mail@kristianbagge.com
+[commit]
+  gpgSign = true
+[alias]
+  graph = log --graph --oneline --decorate
+#[core]
+#  editor = emacsclient -a "" -t # This way I can use the emacsclient and it shouldn't hang like when -n is used.
+[color]
+  ui = auto
+[github]
+  user = kbagge
+  oauth-token = {{ (bitwardenFields "item" "github.com").cli_token.value }}

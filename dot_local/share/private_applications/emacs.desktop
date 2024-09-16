@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Emacs
+GenericName=Emacs on arch distrobox
+Categories=Distrobox;System;Utility
+Exec=/usr/bin/distrobox enter emacs -- emacs
+Icon=emacs
+Keywords=distrobox;
+TryExec=/usr/bin/distrobox
+Type=Application

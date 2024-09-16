@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Emacsclient
+GenericName=Terminal entering Emacs
+Comment=Terminal entering Emacs
+Categories=Distrobox;System;Utility
+Exec=/usr/bin/distrobox enter emacs -- 'emacsclient -nc'
+Icon=emacs
+Keywords=distrobox;
+TryExec=/usr/bin/distrobox
+Type=Application
