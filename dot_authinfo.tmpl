@@ -1,1 +1,1 @@
-machine api.openai.com login apikey password {{ (bitwardenFields "item" "openai_api").api.value }}
+machine api.openai.com login apikey password {{ pass "chezmoi/openai/api" }}

@@ -1522,7 +1522,7 @@
 (use-package gptel
   :config
   (gptel-make-kagi "Kagi"                    ;any name
-    :key "{{ (bitwardenFields "item" "kagi.com").api_key.value }}")                ;can be a function that returns the key
+    :key "{{ pass "chezmoi/kagi/api" }}")
   (gptel-make-ollama "Ollama"             ;Any name of your choosing
     :host "localhost:11434"               ;Where it's running
     :stream t                             ;Stream responses

@@ -6,3 +6,4 @@ XDG_STATE_HOME=$HOME/.local/state
 ZDOTDIR=$HOME/.config/zsh
 GNUPGHOME=$HOME/.config/gnupg
 BW_SESSION="hbnL+tAiv0CPFTqYCN9Ny5NND/n152EpBE4BSDs7D1kgJTLdVXU9HW6kfrhI0rMm96QUihqQ3d765MHdGPhnfg=="
+PATH=/var/home/bagge/.pixi/bin:$PATH

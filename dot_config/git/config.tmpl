@@ -12,4 +12,5 @@
   ui = auto
 [github]
   user = kbagge
-  oauth-token = {{ (bitwardenFields "item" "github.com").cli_token.value }}
+oauth-token = {{ pass "chezmoi/github/api" }}
+
