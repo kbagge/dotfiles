@@ -1,0 +1,2718 @@
+#+Title: My emacs litterate config
+#+author: Kristian Bagge
+#+property: header-args :mkdirp yes
+
+* Inspiration
+- Tecosaur
+- Prot
+- Emacs from scratch
+- Hlissner
+* Start up
+** Early init
+#+begin_src emacs-lisp :tangle early-init.el
+  ;; early-init.el -*- lexical-binding: t; -*-
+
+  ;;; Garbage collection
+    (setq gc-cons-threshold most-positive-fixnum)    ; Very large threshold for garbage
+                                                 ; collector during init
+    ;; Reset garbage collector limit after init process has ended (8Mo)
+    (add-hook 'after-init-hook
+              #'(lambda () (setq gc-cons-threshold (* 8 1024 1024))))
+
+  (require 'package)
+  (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
+  ;; Comment/uncomment this line to enable MELPA Stable if desired.  See `package-archive-priorities`
+  ;; and `package-pinned-packages`. Most users will not need or want to do this.
+  ;;(add-to-list 'package-archives '("melpa-stable" . "https://stable.melpa.org/packages/") t)
+  (package-initialize)
+
+  (setq use-package-always-ensure t)
+  (setq package-install-upgrade-built-in t)
+  (require 'use-package)
+
+  ;; vc-use package. Is part of emacs 30.something. I'm using 29, so I install manually.
+  (unless (package-installed-p 'vc-use-package)
+    (package-vc-install "https://github.com/slotThe/vc-use-package"))
+  (require 'vc-use-package)
+
+  ;; Menu bar disabled
+    (menu-bar-mode -1)
+    (tool-bar-mode -1)
+    (tooltip-mode -1)
+    (scroll-bar-mode -1)
+
+#+end_src
+** Keybinds
+I use bind-keys to make maps, and later assign bindings to those maps.
+It is important to keep this in the beginning of the file for other packages to be able to map to them.
+#+begin_src emacs-lisp :tangle my-modules/my-startup.el
+  ;;; Binding maps - bind-key
+  ;; I use bind-key to make to maps with each two prefixes. Then later I assign commands to each map.
+  (bind-keys
+   :prefix-map my-notes-map
+   :prefix "C-c n"
+   :prefix "M-n")
+
+  (bind-keys
+   :prefix-map my-open-map
+   :prefix "C-c o"
+   :prefix "M-o")
+
+  (bind-keys
+   :prefix-map my-insert-map
+   :prefix "C-c i")
+
+  (bind-keys :map my-insert-map
+             ("c" . insert-char)
+             )
+
+#+end_src
+
+** Dashboard
+#+begin_src emacs-lisp :tangle my-modules/my-startup.el
+;;;; Dashboard
+(use-package dashboard
+  :ensure t
+  :config
+  (dashboard-setup-startup-hook))
+
+#+end_src
+** Restart emacs
+#+begin_src emacs-lisp :tangle my-modules/my-startup.el
+  ;;;; Restart emacs
+  (use-package restart-emacs
+    :defer t)
+
+  
+(provide 'my-startup)
+#+end_src
+
+* Load modules
+With a modular config I find it easier to switch to try out new packages. Just make a new module, activate it and deactivate the old. Then it is just as easy to switch back in case I preferred the old setup. Thereby it is also easy to deactivate packages, if I don't use them for a time.
+#+begin_src emacs-lisp :tangle init.el
+   ;; Add the folder with modules to load path
+   (mapc
+    (lambda (string)
+      (add-to-list 'load-path (locate-user-emacs-file string)))
+    '("my-modules")) ; More folders can be added if nedded '("example1" "example2"))
+
+   ;; General
+   (require 'my-startup)
+   (require 'my-defaults)
+   (require 'my-dired)
+   ;; Theming
+   (require 'my-modus-theme)
+   (require 'my-general-theming)
+   (require 'my-fonts)
+  ;; (require 'my-modeline)
+  (require 'my-doom-modeline)
+   ;; Editor
+   (require 'my-editor-settings)
+   (require 'my-workspace)
+   (require 'my-spelling)
+   (require 'my-completion)
+   (require 'my-minibuffer)
+   ;; User
+   (require 'my-user-info)
+   (require 'my-org-setup)
+   ;; Notes
+   (require 'my-denote-setup)
+   (require 'my-citar-setup)
+   ;; Office
+   (require 'my-office-setup)
+   (require 'my-elfeed)
+   (require 'my-pocket)
+   (require 'my-mu4e)
+   ;; Programming
+   (require 'my-programming-setup)
+   (require 'my-python)
+   (require 'my-chezmoi)
+   (require 'my-latex)
+   (require 'my-git)
+   (require 'my-llm)
+#+end_src
+* My defaults
+Tweaking the built in parts to my liking.
+Remember the .tmpl ending is due to chezmoi injecting sensitive information from pass.
+#+begin_src emacs-lisp :tangle my-modules/my-defaults.el.tmpl
+    ;;;; No warning for 80 char docstrin
+    (setq native-comp-async-report-warnings-errors 'silent)
+
+  ;;;; Custom file
+  (setq custom-file (concat user-emacs-directory "custom.el"))
+  (when (file-exists-p custom-file)
+    (load custom-file))
+  ;;;; Handling files
+  (setq confirm-nonexistent-file-or-buffer nil
+        create-lockfiles nil)
+
+  ;; Kill current buffer (instead of asking first buffer name)
+  (bind-key "C-x k" 'kill-current-buffer)
+
+  ;; Give normal names to files in buffer list
+  (setq uniquify-buffer-name-style 'forward)
+
+  ;; remember recent files
+  (add-hook 'after-init-hook #'recentf-mode)
+  (setq recentf-max-saved-items 250)
+  (bind-key "C-x C-r" 'consult-recent-file)
+
+  ;;;; Shortcut for config and server
+  ;; First let's make a function for opening a specific file, so we can call it with leader key. Weekday avoid using lampda so we have a nice name for which-key to show.
+  (defun open-emacs-config () (interactive) (find-file "~/.local/share/chezmoi/dot_config/emacs/config.org"))
+  (defun connect-to-server () (interactive) (find-file "/ssh:server@server.kristianbagge.com:")) ;; For now this opens up dired in ~/ folder on server by using TRAMP.
+  ;; Bind it
+  (bind-key "C" 'open-emacs-config my-open-map)
+  (bind-key "S" 'connect-to-server my-open-map)
+
+  ;;;; Sudo this file
+  ;; My try at a function that sudo this file
+  (defun sudo-this-file (file-name)
+    "Like find file, but opens the file as root."
+    (interactive "FSudo Find File: ")
+    (let ((tramp-file-name (concat "/sudo::" (expand-file-name file-name))))
+      (find-file tramp-file-name)))
+  (bind-key "s" 'sudo-this-file my-open-map)
+
+  (setq backup-directory-alist       ; File name patterns and backup directory names.
+        `(("." . ,(expand-file-name "backups" user-emacs-directory)))
+        make-backup-files t          ; Backup of a file the first time it is saved.
+        vc-make-backup-files t       ; No backup of files under version contr
+        backup-by-copying t          ; Don't clobber symlinks
+        version-control t            ; Version numbers for backup files
+        delete-old-versions t        ; Delete excess backup files silently
+        kept-old-versions 4          ; Number of old versions to keep
+        kept-new-versions 7          ; Number of new versions to keep
+        delete-by-moving-to-trash t) ; Delete files to trash
+
+  (setq auto-save-list-file-prefix ; Prefix for generating auto-save-list-file-name
+        (expand-file-name ".auto-save-list/.saves-" user-emacs-directory)
+        auto-save-default t        ; Auto-save every buffer that visits a file
+        auto-save-timeout 20       ; Number of seconds between auto-save
+        auto-save-interval 200)    ; Number of keystrokes between auto-saves
+  (setq auto-save-file-name-transforms
+        `((".*" "~/.config/emacs/.auto-saves/" t))) ; Make a folder for autosaves instead of cluttering all my folders.
+
+  ;;;; Pop up windows
+  (use-package popper
+    :ensure t ; or :straight t
+    :bind (("C-`"   . popper-toggle)
+           ("M-`"   . popper-cycle)
+           ("C-M-`" . popper-toggle-type))
+    :init
+    (setq popper-reference-buffers
+          '("\\*Messages\\*"
+            "Output\\*$"
+            "\\*Async Shell Command\\*"
+            help-mode
+            compilation-mode))
+    (popper-mode +1)
+    (popper-echo-mode +1))                ; For echo area hints
+
+  ;;;; No beep 
+  (setq ring-bell-function #'ignore
+        visible-bell nil)
+  (blink-cursor-mode -1)
+
+  ;;;; Y or N, not yes or no
+  (setq use-short-answers t)
+                                          ;  (defalias 'yes-or-no-p 'y-or-n-p)
+  ;;;; Repeat mode (nice for C-x o)
+  (repeat-mode 1)
+  ;;;; A simple frame title
+  (setq frame-title-format '(" %b"))
+
+
+    (provide 'my-defaults)
+#+end_src
+
+* Dired
+#+begin_src emacs-lisp :tangle my-modules/my-dired.el 
+  ;;;; Dired / dirvish setup
+  (use-package dired
+    :ensure nil
+    :init
+    (setq dired-recursive-copies 'always) ; operate on entire folder
+    (setq dired-recursive-delete 'always) ; operate on entire folder
+    (setq dired-dwim-target t) ; Let emacs try to get the destination (other dired window)
+
+    :bind (:map my-open-map
+                ("d" . dired))
+    :hook
+    (dired-mode . dired-hide-details-mode)
+    )
+(provide 'my-dired)
+#+end_src
+
+* UI
+** Theming
+*** Modus
+#+begin_src emacs-lisp :tangle my-modules/my-modus-theme.el
+  ;; For packaged versions which must use `require'.
+  (use-package modus-themes
+    :ensure t
+    :init
+    (setq custom-safe-themes t)
+    :config
+    ;; Add all your customizations prior to loading the themes
+    (setq modus-themes-italic-constructs t
+          modus-themes-bold-constructs nil
+          modus-themes-mixed-fonts t)
+
+    ;; Maybe define some palette overrides, such as by using our presets
+    (setq modus-themes-common-palette-overrides
+          modus-themes-preset-overrides-intense)
+
+     ;;;; Custom set faces - maybe seperate them out, if I do more customization.
+    (set-face-attribute 'link nil
+                      :weight 'regular)
+
+    ;; Load the theme of your choice.
+    (load-theme 'modus-operandi-tinted)
+
+    (define-key global-map (kbd "<f5>") #'modus-themes-toggle)
+    (setq modus-themes-to-toggle '(modus-operandi-tinted modus-vivendi-tinted))
+    )
+  (provide 'my-modus-theme)
+#+end_src
+*** Doom
+#+begin_src emacs-lisp :tangle my-modules/my-doom-theme.el
+;;;; Theming
+;; (use-package doom-themes
+;;   :ensure t
+;;   :config
+;;   ;; Global settings (defaults)
+;;   (setq doom-themes-enable-bold t    ; if nil, bold is universally disabled
+;;         doom-themes-enable-italic t) ; if nil, italics is universally disabled
+;;   (load-theme 'doom-one t)
+
+;;   ;; Enable flashing mode-line on errors
+;;   (doom-themes-visual-bell-config)
+;;   ;; Enable custom neotree theme (all-the-icons must be installed!)
+;;   (doom-themes-neotree-config)
+;;   ;; or for treemacs users
+;;   (setq doom-themes-treemacs-theme "doom-atom") ; use "doom-colors" for less minimal icon theme
+;;   (doom-themes-treemacs-config)
+;;   ;; Corrects (and improves) org-mode's native fontification.
+;;   (doom-themes-org-config))
+#+end_src
+
+** General theming
+
+*** Highlight current line
+#+begin_src emacs-lisp  :tangle my-modules/my-general-theming.el
+  ;; Highlight current line
+  (global-hl-line-mode 1)
+
+#+end_src
+*** Solaire
+#+begin_src emacs-lisp :tangle my-modules/my-general-theming.el
+  ;;;; Solaire mode
+  ;; Make it easier to differentiate real buffers from less important.
+  (use-package solaire-mode
+    :init
+    (solaire-global-mode +1))
+#+end_src
+
+*** Better interface
+Helpfull, Which key, Rainbow delimeters
+#+begin_src emacs-lisp :tangle my-modules/my-general-theming.el
+;;;; Helpfull
+(use-package helpful
+  ;; Note that the built-in `describe-function' includes both functions
+  ;; and macros. `helpful-function' is functions only, so we provide
+  ;; `helpful-callable' as a drop-in replacement.
+  :bind (:map help-map
+              ("f" . helpful-callable)
+              ("F" . helpful-function)
+              ("C" . helpful-command)
+              ("v" . helpful-variable)
+              ("k" . helpful-key)
+              ("C-p" . helpful-at-point))    ;; Lookup the current symbol at point. C-c C-d is a common keybinding, but I prefer C-h C-p, which was bound to known bugs in emacs.
+  )
+;; By default, C-h F is bound to `Info-goto-emacs-command-node'. Helpful
+;; already links to the manual, if a function is referenced there.
+
+;; Look up *C*ommands.
+;; By default, C-h C is bound to describe `describe-coding-system'. I
+;; don't find this very useful, but it's frequently useful to only
+;; look at interactive functions.
+
+;;;; Rainbow delimeters
+(use-package rainbow-delimiters
+  :hook (prog-mode-hook . rainbow-delimiters-mode))
+
+;;;; Which key
+(use-package which-key
+  :defer 1
+  :init
+  (setq which-key-show-early-on-C-h t)
+  (setq-local which-key-idle-delay 0.3 which-key-idle-secondary-delay 0.05)
+  :custom
+  (which-key-mode 1))
+
+#+end_src
+*** Spacious padding
+  
+  #+begin_src emacs-lisp :tangle my-modules/my-general-theming.el
+    ;;;; Spacious padding
+    (require 'spacious-padding)
+
+    ;; These is the default value, but I keep it here for visiibility.
+    (setq spacious-padding-widths
+          '( :internal-border-width 15
+             :header-line-width 4
+             :mode-line-width 6
+             :tab-width 4
+             :right-divider-width 30
+             :scroll-bar-width 8
+             :fringe-width 8))
+
+    ;; Read the doc string of `spacious-padding-subtle-mode-line' as it
+    ;; is very flexible and provides several examples.
+    (setq spacious-padding-subtle-mode-line
+          `( :mode-line-active 'default
+             :mode-line-inactive vertical-border))
+
+    (spacious-padding-mode 1)
+    (provide 'my-general-theming)
+#+end_src
+** Fonts
+#+begin_src emacs-lisp :tangle my-modules/my-fonts.el
+  ;;;; Fonts
+  ;; I use fontaine to set my fonts
+  (use-package fontaine
+    :init
+    (add-hook 'enable-theme-functions #'fontaine-apply-current-preset)
+    :config
+    (setq fontaine-presets
+          '((small
+             ;; :default-family "Iosevka Comfy Fixed"
+             :default-height 100
+             :fixed-pitch-height 90
+             :variable-pitch-height 110)
+            (regular
+             :fixed-pitch-height 110
+             :variable-pitch-height 145)
+            (medium
+             :fixed-pitch-height 105
+             :variable-pitch-height 140)
+            (large
+             :fixed-pitch-height 115
+             :variable-pitch-weight semilight
+             :variable-pitch-height 160
+             :bold-weight extrabold)
+            (presentation
+             :fixed-pitch-height 135
+             :variable-pitch-weight semilight
+             :variable-pitch-height 170
+             :bold-weight extrabold)
+            (jumbo
+             :default-weight semilight
+             :default-height 220
+             :bold-weight extrabold)
+            (t
+             ;; I keep all properties for didactic purposes, but most can be
+             ;; omitted.  See the fontaine manual for the technicalities:
+             ;; <https://protesilaos.com/emacs/fontaine>.
+             ;;           :default-family "IBM Plex Mono"
+             :default-family "Overpass Nerd Font Propo Regular"
+             :default-weight light
+             :default-height 120
+             :fixed-pitch-family "Overpass Nerd Font Propo Regular" ; nil - means falls back to :default-family
+             :fixed-pitch-weight semilight ; falls back to :default-weight
+             :fixed-pitch-height 110
+             :fixed-pitch-serif-family nil ; falls back to :default-family
+             :fixed-pitch-serif-weight nil ; falls back to :default-weight
+             :fixed-pitch-serif-height 1.0
+             ;;           :variable-pitch-family "IBM Plex Sans Condensed"
+             :variable-pitch-family "Overpass"
+             :variable-pitch-weight semilight
+             :variable-pitch-height 155
+             :bold-family nil ; use whatever the underlying face has
+             :bold-weight regular
+             :italic-family nil
+             :italic-slant italic
+             :line-spacing 1)))
+    (fontaine-set-preset 'medium)
+    )
+
+  ;;;; Icons
+  (use-package nerd-icons
+    :ensure t
+    :bind (:map my-insert-map
+                ("i" . nerd-icons-insert)))
+
+  (use-package nerd-icons-dired
+    :ensure t
+    :after nerd-icons
+    :hook (dired-mode . nerd-icons-dired-mode)
+    :config
+    (nerd-icons-dired-mode t)
+    )
+
+  (use-package nerd-icons-completion
+    :after marginalia
+    :config
+    (nerd-icons-completion-mode)
+    (add-hook 'marginalia-mode-hook #'nerd-icons-completion-marginalia-setup))
+
+  (use-package nerd-icons-ibuffer
+    :ensure t
+    :hook (ibuffer-mode . nerd-icons-ibuffer-mode))
+
+  (use-package nerd-icons-corfu
+    :after corfu nerd-icons
+    :ensure t
+    :config
+    (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter)
+
+    ;; Optionally:
+    (setq nerd-icons-corfu-mapping
+          '((array :style "cod" :icon "symbol_array" :face font-lock-type-face)
+            (boolean :style "cod" :icon "symbol_boolean" :face font-lock-builtin-face)
+            ;; ...
+            (t :style "cod" :icon "code" :face font-lock-warning-face))))
+  ;; Remember to add an entry for `t', the library uses that as default.
+  ;; The Custom interface is also supported for tuning the variable above.)
+
+(provide 'my-fonts)
+#+end_src
+
+** Modeline
+*** Modeline faces
+#+begin_src emacs-lisp :tangle my-modules/my-modeline.el
+
+  ;;;; Faces
+
+  (defface prot-modeline-indicator-button nil
+    "Generic face used for indicators that have a background.
+  Modify this face to, for example, add a :box attribute to all
+  relevant indicators (combines nicely with my `spacious-padding'
+  package).")
+
+  (defface prot-modeline-indicator-red
+    '((default :inherit bold)
+      (((class color) (min-colors 88) (background light))
+       :foreground "#880000")
+      (((class color) (min-colors 88) (background dark))
+       :foreground "#ff9f9f")
+      (t :foreground "red"))
+    "Face for modeline indicators (e.g. see my `notmuch-indicator')."
+    :group 'prot-modeline-faces)
+
+  (defface prot-modeline-indicator-red-bg
+    '((default :inherit (bold prot-modeline-indicator-button))
+      (((class color) (min-colors 88) (background light))
+       :background "#aa1111" :foreground "white")
+      (((class color) (min-colors 88) (background dark))
+       :background "#ff9090" :foreground "black")
+      (t :background "red" :foreground "black"))
+    "Face for modeline indicators with a background."
+    :group 'prot-modeline-faces)
+
+  (defface prot-modeline-indicator-green
+    '((default :inherit bold)
+      (((class color) (min-colors 88) (background light))
+       :foreground "#005f00")
+      (((class color) (min-colors 88) (background dark))
+       :foreground "#73fa7f")
+      (t :foreground "green"))
+    "Face for modeline indicators (e.g. see my `notmuch-indicator')."
+    :group 'prot-modeline-faces)
+
+  (defface prot-modeline-indicator-green-bg
+    '((default :inherit (bold prot-modeline-indicator-button))
+      (((class color) (min-colors 88) (background light))
+       :background "#207b20" :foreground "white")
+      (((class color) (min-colors 88) (background dark))
+       :background "#77d077" :foreground "black")
+      (t :background "green" :foreground "black"))
+    "Face for modeline indicators with a background."
+    :group 'prot-modeline-faces)
+
+  (defface prot-modeline-indicator-yellow
+    '((default :inherit bold)
+      (((class color) (min-colors 88) (background light))
+       :foreground "#6f4000")
+      (((class color) (min-colors 88) (background dark))
+       :foreground "#f0c526")
+      (t :foreground "yellow"))
+    "Face for modeline indicators (e.g. see my `notmuch-indicator')."
+    :group 'prot-modeline-faces)
+
+  (defface prot-modeline-indicator-yellow-bg
+    '((default :inherit (bold prot-modeline-indicator-button))
+      (((class color) (min-colors 88) (background light))
+       :background "#805000" :foreground "white")
+      (((class color) (min-colors 88) (background dark))
+       :background "#ffc800" :foreground "black")
+      (t :background "yellow" :foreground "black"))
+    "Face for modeline indicators with a background."
+    :group 'prot-modeline-faces)
+
+  (defface prot-modeline-indicator-blue
+    '((default :inherit bold)
+      (((class color) (min-colors 88) (background light))
+       :foreground "#00228a")
+      (((class color) (min-colors 88) (background dark))
+       :foreground "#88bfff")
+      (t :foreground "blue"))
+    "Face for modeline indicators (e.g. see my `notmuch-indicator')."
+    :group 'prot-modeline-faces)
+
+  (defface prot-modeline-indicator-blue-bg
+    '((default :inherit (bold prot-modeline-indicator-button))
+      (((class color) (min-colors 88) (background light))
+       :background "#0000aa" :foreground "white")
+      (((class color) (min-colors 88) (background dark))
+       :background "#77aaff" :foreground "black")
+      (t :background "blue" :foreground "black"))
+    "Face for modeline indicators with a background."
+    :group 'prot-modeline-faces)
+
+  (defface prot-modeline-indicator-magenta
+    '((default :inherit bold)
+      (((class color) (min-colors 88) (background light))
+       :foreground "#6a1aaf")
+      (((class color) (min-colors 88) (background dark))
+       :foreground "#e0a0ff")
+      (t :foreground "magenta"))
+    "Face for modeline indicators (e.g. see my `notmuch-indicator')."
+    :group 'prot-modeline-faces)
+
+  (defface prot-modeline-indicator-magenta-bg
+    '((default :inherit (bold prot-modeline-indicator-button))
+      (((class color) (min-colors 88) (background light))
+       :background "#6f0f9f" :foreground "white")
+      (((class color) (min-colors 88) (background dark))
+       :background "#e3a2ff" :foreground "black")
+      (t :background "magenta" :foreground "black"))
+    "Face for modeline indicators with a background."
+    :group 'prot-modeline-faces)
+
+  (defface prot-modeline-indicator-cyan
+    '((default :inherit bold)
+      (((class color) (min-colors 88) (background light))
+       :foreground "#004060")
+      (((class color) (min-colors 88) (background dark))
+       :foreground "#30b7cc")
+      (t :foreground "cyan"))
+    "Face for modeline indicators (e.g. see my `notmuch-indicator')."
+    :group 'prot-modeline-faces)
+
+  (defface prot-modeline-indicator-cyan-bg
+    '((default :inherit (bold prot-modeline-indicator-button))
+      (((class color) (min-colors 88) (background light))
+       :background "#006080" :foreground "white")
+      (((class color) (min-colors 88) (background dark))
+       :background "#40c0e0" :foreground "black")
+      (t :background "cyan" :foreground "black"))
+    "Face for modeline indicators with a background."
+    :group 'prot-modeline-faces)
+
+  (defface prot-modeline-indicator-gray
+    '((t :inherit shadow))
+    "Face for modeline indicators (e.g. see my `notmuch-indicator')."
+    :group 'prot-modeline-faces)
+
+  (defface prot-modeline-indicator-gray-bg
+    '((default :inherit (bold prot-modeline-indicator-button))
+      (((class color) (min-colors 88) (background light))
+       :background "#808080" :foreground "white")
+      (((class color) (min-colors 88) (background dark))
+       :background "#a0a0a0" :foreground "black")
+      (t :inverse-video t))
+    "Face for modeline indicatovrs with a background."
+    :group 'prot-modeline-faces)
+
+#+end_src
+*** Modeline helper functions
+#+begin_src emacs-lisp :tangle my-modules/my-modeline.el
+    ;;;; Common helper functions
+
+  (defun prot-common-window-narrow-p ()
+    "Return non-nil if window is narrow.
+  Check if the `window-width' is less than `split-width-threshold'."
+    (and (numberp split-width-threshold)
+         (< (window-total-width) split-width-threshold)))
+  
+    (defun prot-modeline--string-truncate-p (str)
+      "Return non-nil if STR should be truncated."
+      (if (string-empty-p str)
+          str
+        (and (prot-common-window-narrow-p)
+             (> (length str) prot-modeline-string-truncate-length)
+             (not (one-window-p :no-minibuffer)))))
+
+    (defun prot-modeline--truncate-p ()
+      "Return non-nil if truncation should happen.
+    This is a more general and less stringent variant of
+    `prot-modeline--string-truncate-p'."
+      (and (prot-common-window-narrow-p)
+           (not (one-window-p :no-minibuffer))))
+
+    (defun prot-modeline-string-cut-end (str)
+      "Return truncated STR, if appropriate, else return STR.
+    Cut off the end of STR by counting from its start up to
+    `prot-modeline-string-truncate-length'."
+      (if (prot-modeline--string-truncate-p str)
+          (concat (substring str 0 prot-modeline-string-truncate-length) "...")
+        str))
+
+    (defun prot-modeline-string-cut-beginning (str)
+      "Return truncated STR, if appropriate, else return STR.
+    Cut off the beginning of STR by counting from its end up to
+    `prot-modeline-string-truncate-length'."
+      (if (prot-modeline--string-truncate-p str)
+          (concat "..." (substring str (- prot-modeline-string-truncate-length)))
+        str))
+
+    (defun prot-modeline-string-cut-middle (str)
+      "Return truncated STR, if appropriate, else return STR.
+    Cut off the middle of STR by counting half of
+    `prot-modeline-string-truncate-length' both from its beginning
+    and end."
+      (let ((half (floor prot-modeline-string-truncate-length 2)))
+        (if (prot-modeline--string-truncate-p str)
+            (concat (substring str 0 half) "..." (substring str (- half)))
+          str)))
+
+    (defun prot-modeline--first-char (str)
+      "Return first character from STR."
+      (substring str 0 1))
+
+    (defun prot-modeline-string-abbreviate (str)
+      "Abbreviate STR individual hyphen or underscore separated words.
+    Also see `prot-modeline-string-abbreviate-but-last'."
+      (if (prot-modeline--string-truncate-p str)
+          (mapconcat #'prot-modeline--first-char (split-string str "[_-]") "-")
+        str))
+
+    (defun prot-modeline-string-abbreviate-but-last (str nthlast)
+      "Abbreviate STR, keeping NTHLAST words intact.
+    Also see `prot-modeline-string-abbreviate'."
+      (if (prot-modeline--string-truncate-p str)
+          (let* ((all-strings (split-string str "[_-]"))
+                 (nbutlast-strings (nbutlast (copy-sequence all-strings) nthlast))
+                 (last-strings (nreverse (ntake nthlast (nreverse (copy-sequence all-strings)))))
+                 (first-component (mapconcat #'prot-modeline--first-char nbutlast-strings "-"))
+                 (last-component (mapconcat #'identity last-strings "-")))
+            (if (string-empty-p first-component)
+                last-component
+              (concat first-component "-" last-component)))
+        str))
+
+#+end_src
+*** Modeline code
+#+begin_src emacs-lisp :tangle my-modules/my-modeline.el
+
+    ;; My mode line with the `prot-modeline.el' 🤩
+    ;; Note that separate to this is my `prot-modeline-subtle-mode'.
+    (setq-default mode-line-format
+                  '("%e"
+                    prot-modeline-kbd-macro
+                    prot-modeline-narrow
+                    prot-modeline-buffer-status
+                    " "
+                    prot-modeline-buffer-identification
+                    "  "
+                    prot-modeline-major-mode
+                    prot-modeline-process
+                    "  "
+                 ;;   prot-modeline-vc-branch
+                    "  "
+                    prot-modeline-flymake
+                    "  "
+                    prot-modeline-align-right
+                    prot-modeline-misc-info))
+
+
+  ;;;; Keyboard macro indicator
+
+  (defvar-local prot-modeline-kbd-macro
+      '(:eval
+        (when (and (mode-line-window-selected-p) defining-kbd-macro)
+          (propertize " KMacro " 'face 'prot-modeline-indicator-blue-bg)))
+    "Mode line construct displaying `mode-line-defining-kbd-macro'.
+  Specific to the current window's mode line.")
+
+
+  ;;;; Narrow indicator
+
+  (defvar-local prot-modeline-narrow
+      '(:eval
+        (when (and (mode-line-window-selected-p)
+                   (buffer-narrowed-p)
+                   (not (derived-mode-p 'Info-mode 'help-mode 'special-mode 'message-mode)))
+          (propertize " Narrow " 'face 'prot-modeline-indicator-cyan-bg)))
+    "Mode line construct to report the narrowed state of the current buffer.")
+
+  ;;;; Remote status
+
+  (defvar-local prot-modeline-buffer-status
+      '(:eval
+        (when (file-remote-p default-directory)
+          (propertize " @ "
+                      'face 'prot-modeline-indicator-red-bg
+                      'mouse-face 'mode-line-highlight)))
+    "Mode line construct for showing remote file name.")
+
+  ;;;; Dedicated window
+
+  (defvar-local prot-modeline-window-dedicated-status
+      '(:eval
+        (when (window-dedicated-p)
+          (propertize " = "
+                      'face 'prot-modeline-indicator-gray-bg
+                      'mouse-face 'mode-line-highlight)))
+    "Mode line construct for dedicated window indicator.")
+
+  ;;;; Buffer name and modified status
+
+  (defun prot-modeline-buffer-identification-face ()
+    "Return appropriate face or face list for `prot-modeline-buffer-identification'."
+    (let ((file (buffer-file-name)))
+      (cond
+       ((and (mode-line-window-selected-p)
+             file
+             (buffer-modified-p))
+        '(italic mode-line-buffer-id))
+       ((and file (buffer-modified-p))
+        'italic)
+       ((mode-line-window-selected-p)
+        'mode-line-buffer-id))))
+
+  (defun prot-modeline--buffer-name ()
+    "Return `buffer-name', truncating it if necessary.
+  See `prot-modeline-string-cut-middle'."
+    (when-let* ((name (buffer-name)))
+      (prot-modeline-string-cut-middle name)))
+
+  (defun prot-modeline-buffer-name ()
+    "Return buffer name, with read-only indicator if relevant."
+    (let ((name (prot-modeline--buffer-name)))
+      (if buffer-read-only
+          (format "%s %s" (char-to-string #xE0A2) name)
+        name)))
+
+  (defun prot-modeline-buffer-name-help-echo ()
+    "Return `help-echo' value for `prot-modeline-buffer-identification'."
+    (concat
+     (propertize (buffer-name) 'face 'mode-line-buffer-id)
+     "\n"
+     (propertize
+      (or (buffer-file-name)
+          (format "No underlying file.\nDirectory is: %s" default-directory))
+      'face 'font-lock-doc-face)))
+
+  (defvar-local prot-modeline-buffer-identification
+      '(:eval
+        (propertize (prot-modeline-buffer-name)
+                    'face (prot-modeline-buffer-identification-face)
+                    'mouse-face 'mode-line-highlight
+                    'help-echo (prot-modeline-buffer-name-help-echo)))
+    "Mode line construct for identifying the buffer being displayed.
+  Propertize the current buffer with the `mode-line-buffer-id'
+  face.  Let other buffers have no face.")
+
+  ;;;; Major mode
+
+  (defun prot-modeline-major-mode-indicator ()
+    "Return appropriate propertized mode line indicator for the major mode."
+    (let ((indicator (cond
+                      ((derived-mode-p 'text-mode) "§")
+                      ((derived-mode-p 'prog-mode) "λ")
+                      ((derived-mode-p 'comint-mode) ">_")
+                      (t "◦"))))
+      (propertize indicator 'face 'shadow)))
+
+  (defun prot-modeline-major-mode-name ()
+    "Return capitalized `major-mode' without the -mode suffix."
+    (capitalize (string-replace "-mode" "" (symbol-name major-mode))))
+
+  (defun prot-modeline-major-mode-help-echo ()
+    "Return `help-echo' value for `prot-modeline-major-mode'."
+    (if-let* ((parent (get major-mode 'derived-mode-parent)))
+        (format "Symbol: `%s'.  Derived from: `%s'" major-mode parent)
+      (format "Symbol: `%s'." major-mode)))
+
+  (defvar-local prot-modeline-major-mode
+      (list
+       (propertize "%[" 'face 'prot-modeline-indicator-red)
+       '(:eval
+         (concat
+          (prot-modeline-major-mode-indicator)
+          " "
+          (propertize
+           (prot-modeline-string-abbreviate-but-last
+            (prot-modeline-major-mode-name)
+            2)
+           'mouse-face 'mode-line-highlight
+           'help-echo (prot-modeline-major-mode-help-echo))))
+       (propertize "%]" 'face 'prot-modeline-indicator-red))
+    "Mode line construct for displaying major modes.")
+
+  (defvar-local prot-modeline-process
+      (list '("" mode-line-process))
+    "Mode line construct for the running process indicator.")
+
+  ;;;; Flymake errors, warnings, notes
+
+  (declare-function flymake--severity "flymake" (type))
+  (declare-function flymake-diagnostic-type "flymake" (diag))
+
+  ;; Based on `flymake--mode-line-counter'.
+  (defun prot-modeline-flymake-counter (type)
+    "Compute number of diagnostics in buffer with TYPE's severity.
+  TYPE is usually keyword `:error', `:warning' or `:note'."
+    (let ((count 0))
+      (dolist (d (flymake-diagnostics))
+        (when (= (flymake--severity type)
+                 (flymake--severity (flymake-diagnostic-type d)))
+          (cl-incf count)))
+      (when (cl-plusp count)
+        (number-to-string count))))
+
+  (defvar prot-modeline-flymake-map
+    (let ((map (make-sparse-keymap)))
+      (define-key map [mode-line down-mouse-1] 'flymake-show-buffer-diagnostics)
+      (define-key map [mode-line down-mouse-3] 'flymake-show-project-diagnostics)
+      map)
+    "Keymap to display on Flymake indicator.")
+
+  (defmacro prot-modeline-flymake-type (type indicator &optional face)
+    "Return function that handles Flymake TYPE with stylistic INDICATOR and FACE."
+    `(defun ,(intern (format "prot-modeline-flymake-%s" type)) ()
+       (when-let* ((count (prot-modeline-flymake-counter
+                           ,(intern (format ":%s" type)))))
+         (concat
+          (propertize ,indicator 'face 'shadow)
+          (propertize count
+                      'face ',(or face type)
+                      'mouse-face 'mode-line-highlight
+                      ;; FIXME 2023-07-03: Clicking on the text with
+                      ;; this buffer and a single warning present, the
+                      ;; diagnostics take up the entire frame.  Why?
+                      'local-map prot-modeline-flymake-map
+                      'help-echo "mouse-1: buffer diagnostics\nmouse-3: project diagnostics")))))
+
+  (prot-modeline-flymake-type error "☣")
+  (prot-modeline-flymake-type warning "!")
+  (prot-modeline-flymake-type note "·" success)
+
+  (defvar-local prot-modeline-flymake
+      `(:eval
+        (when (and (bound-and-true-p flymake-mode)
+                   (mode-line-window-selected-p))
+          (list
+           ;; See the calls to the macro `prot-modeline-flymake-type'
+           '(:eval (prot-modeline-flymake-error))
+           '(:eval (prot-modeline-flymake-warning))
+           '(:eval (prot-modeline-flymake-note)))))
+    "Mode line construct displaying `flymake-mode-line-format'.
+  Specific to the current window's mode line.")
+
+
+  ;;;; Eglot
+
+  (with-eval-after-load 'eglot
+    (setq mode-line-misc-info
+          (delete '(eglot--managed-mode (" [" eglot--mode-line-format "] ")) mode-line-misc-info)))
+
+  (defvar-local prot-modeline-eglot
+      `(:eval
+        (when (and (featurep 'eglot) (mode-line-window-selected-p))
+          '(eglot--managed-mode eglot--mode-line-format)))
+    "Mode line construct displaying Eglot information.
+  Specific to the current window's mode line.")
+
+
+  ;;;; Miscellaneous
+
+  (defvar-local prot-modeline-misc-info
+      '(:eval
+        (when (mode-line-window-selected-p)
+          mode-line-misc-info))
+    "Mode line construct displaying `mode-line-misc-info'.
+  Specific to the current window's mode line.")
+
+  ;;;; Risky local variables
+
+  ;; NOTE 2023-04-28: The `risky-local-variable' is critical, as those
+  ;; variables will not work without it.
+  (dolist (construct '(prot-modeline-kbd-macro
+                       prot-modeline-narrow
+                       prot-modeline-input-method
+                       prot-modeline-buffer-status
+                       prot-modeline-window-dedicated-status
+                       prot-modeline-buffer-identification
+                       prot-modeline-major-mode
+                       prot-modeline-process
+                       prot-modeline-vc-branch
+                       prot-modeline-flymake
+                       prot-modeline-eglot
+                       ;; prot-modeline-align-right
+                       prot-modeline-notmuch-indicator
+                       prot-modeline-misc-info))
+    (put construct 'risky-local-variable t))
+
+
+  ;;; Modeline format
+    ;; (setq-default mode-line-format
+    ;;               '("%e"
+    ;;                 my-modeline-buffer-name
+    ;;                 "  "
+    ;;                 my-modeline-major-mode))
+
+    ;; (defface my-modeline-background
+    ;;   '((t :background "#3355bb" :foreground "white" :inherit bold))
+    ;;   "Face with a red background for use on the mode line.")
+
+    ;; ;; Buffer name
+    ;; (defun my-modeline--buffer-name ()
+    ;;   "Return `buffer-name' with spaces around it."
+    ;;   (format " %s " (buffer-name)))
+
+    ;; (defvar-local my-modeline-buffer-name
+    ;;     '(:eval
+    ;;       (when (mode-line-window-selected-p)
+    ;;         (propertize (my-modeline--buffer-name) 'face 'my-modeline-background)))
+    ;;   "Mode line construct to display the buffer name.")
+
+    ;; ;; Major mode name
+    ;; (defun my-modeline--major-mode-name ()
+    ;;   "Return capitalized `major-mode' as a string."
+    ;;   (capitalize (symbol-name major-mode)))
+
+    ;; (defvar-local my-modeline-major-mode
+    ;;     '(:eval
+    ;;       (list
+    ;;        (propertize "λ" 'face 'shadow)
+    ;;        " "
+    ;;        (propertize (my-modeline--major-mode-name) 'face 'bold)))
+    ;;   "Mode line construct to display the major mode.")
+
+    ;; ;; Risky local variable for each term to show up in modeline.
+    ;; (dolist (construct '(my-modeline-major-mode
+    ;;                      my-modeline-buffer-name))
+    ;; (put construct 'risky-local-variable t))
+
+    ;; Emacs 29, check the definition right below
+    ;; (mode-line-window-selected-p)
+
+    (defun mode-line-window-selected-p ()
+      "Return non-nil if we're updating the mode line for the selected window.
+    This function is meant to be called in `:eval' mode line
+    constructs to allow altering the look of the mode line depending
+    on whether the mode line belongs to the currently selected window
+    or not."
+      (let ((window (selected-window)))
+        (or (eq window (old-selected-window))
+        (and (minibuffer-window-active-p (minibuffer-window))
+             (with-selected-window (minibuffer-window)
+               (eq window (minibuffer-selected-window)))))))
+
+    (provide 'my-modeline)
+#+end_src
+*** Doom modeline
+A simple version of doom modeline I used before
+#+begin_src emacs-lisp :tangle my-modules/my-doom-modeline.el
+  ;;;; Show battery and time
+  (display-time-mode 1)              ; Enable time in the mode-line
+  (setq display-time-24hr-format t)
+  (display-battery-mode 0)           ; it's nice to know how much power you have
+
+  ;;;; Modeline
+   (use-package doom-modeline
+     :init
+     ;; Whether to use hud instead of default bar. It's only respected in GUI.
+     (setq doom-modeline-hud t)
+     (setq doom-modeline-buffer-encoding nil) ; No UTF-8 info in bar
+     (setq doom-modeline-buffer-modification-icon nil)
+     (setq doom-modeline-display-misc-in-all-mode-lines nil)
+     (setq doom-modeline-percent-position nil)
+     (setq line-number-mode nil)
+     (setq column-number-mode nil)
+     (setq display-time-default-load-average nil) ;; Remove load average from bar
+
+     :custom
+     (doom-modeline-mode 1)
+
+       )
+
+   (provide 'my-doom-modeline)
+#+end_src
+* Editor
+** Typo, line width...
+#+begin_src emacs-lisp :tangle my-modules/my-editor-settings.el
+;;;; Typo? and line wrapping
+(setq-default fill-column 80                          ; Default line width 
+              sentence-end-double-space nil           ; Use a single space after dots
+                                        ;                bidi-paragraph-direction 'left-to-right ; Faster
+              truncate-string-ellipsis "…")           ; Nicer ellipsis
+
+;; This snippet has something to do with where the underline is places. I trust Nicholas from Nano, check out the variable documentation.
+(setq x-underline-at-descent-line nil
+      x-use-underline-position-properties t
+      underline-minimum-offset 10)
+
+#+end_src
+** Jump
+#+begin_src emacs-lisp :tangle my-modules/my-editor-settings.el
+  ;;;; Jump
+  ;;;;; Avy
+  (use-package avy
+    :bind ("M-g a" . avy-goto-char))
+;;;; I-menu
+;; I should check out how to customize this further
+(use-package imenu-list
+  :bind (:map my-open-map
+              ("i" . imenu-list))
+  :init
+  (setq-default imenu-list-position 'left
+                imenu-max-item-length 1000)
+  )
+
+  
+  ;;;;; Consult
+  ;; Example configuration for Consult
+  (use-package consult
+    ;; Replace bindings. Lazily loaded due by `use-package'.
+    :bind (;; C-c bindings in `mode-specific-map'
+           ("C-c M-x" . consult-mode-command)
+           ("C-c h" . consult-history)
+           ("C-c k" . consult-kmacro)
+           ("C-c m" . consult-man)
+           ("C-c i" . consult-info)
+           ([remap Info-search] . consult-info)
+           ;; C-x bindings in `ctl-x-map'
+           ("C-x M-:" . consult-complex-command)     ;; orig. repeat-complex-command
+           ("C-x b" . consult-buffer)                ;; orig. switch-to-buffer
+           ("C-x 4 b" . consult-buffer-other-window) ;; orig. switch-to-buffer-other-window
+           ("C-x 5 b" . consult-buffer-other-frame)  ;; orig. switch-to-buffer-other-frame
+           ("C-x t b" . consult-buffer-other-tab)    ;; orig. switch-to-buffer-other-tab
+           ("C-x r b" . consult-bookmark)            ;; orig. bookmark-jump
+           ("C-x p b" . consult-project-buffer)      ;; orig. project-switch-to-buffer
+           ;; Custom M-# bindings for fast register access
+           ("M-#" . consult-register-load)
+           ("M-'" . consult-register-store)          ;; orig. abbrev-prefix-mark (unrelated)
+           ("C-M-#" . consult-register)
+           ;; Other custom bindings
+           ("M-y" . consult-yank-pop)                ;; orig. yank-pop
+           ;; M-g bindings in `goto-map'
+           ("M-g e" . consult-compile-error)
+           ("M-g f" . consult-flymake)               ;; Alternative: consult-flycheck
+           ("M-g g" . consult-goto-line)             ;; orig. goto-line
+           ("M-g M-g" . consult-goto-line)           ;; orig. goto-line
+           ("M-g o" . consult-outline)               ;; Alternative: consult-org-heading
+           ("M-g m" . consult-mark)
+           ("M-g k" . consult-global-mark)
+           ("M-g i" . consult-imenu)
+           ("M-g I" . consult-imenu-multi)
+           ;; M-s bindings in `search-map'
+           ("M-s d" . consult-find)                  ;; Alternative: consult-fd
+           ("M-s c" . consult-locate)
+           ("M-s g" . consult-grep)
+           ("M-s G" . consult-git-grep)
+           ("M-s r" . consult-ripgrep)
+           ("M-s l" . consult-line)
+           ("M-s L" . consult-line-multi)
+           ("M-s k" . consult-keep-lines)
+           ("M-s u" . consult-focus-lines)
+           ;; Isearch integration
+           ("M-s e" . consult-isearch-history)
+           :map isearch-mode-map
+           ("M-e" . consult-isearch-history)         ;; orig. isearch-edit-string
+           ("M-s e" . consult-isearch-history)       ;; orig. isearch-edit-string
+           ("M-s l" . consult-line)                  ;; needed by consult-line to detect isearch
+           ("M-s L" . consult-line-multi)            ;; needed by consult-line to detect isearch
+           ;; Minibuffer history
+           :map minibuffer-local-map
+           ("M-s" . consult-history)                 ;; orig. next-matching-history-element
+           ("M-r" . consult-history))                ;; orig. previous-matching-history-element
+
+    ;; Enable automatic preview at point in the *Completions* buffer. This is
+    ;; relevant when you use the default completion UI.
+    :hook (completion-list-mode . consult-preview-at-point-mode)
+
+    ;; The :init configuration is always executed (Not lazy)
+    :init
+
+    ;; Optionally configure the register formatting. This improves the register
+    ;; preview for `consult-register', `consult-register-load',
+    ;; `consult-register-store' and the Emacs built-ins.
+    (setq register-preview-delay 0.5
+          register-preview-function #'consult-register-format)
+
+    ;; Optionally tweak the register preview window.
+    ;; This adds thin lines, sorting and hides the mode line of the window.
+    (advice-add #'register-preview :override #'consult-register-window)
+
+    ;; Use Consult to select xref locations with preview
+    (setq xref-show-xrefs-function #'consult-xref
+          xref-show-definitions-function #'consult-xref)
+
+    ;; Configure other variables and modes in the :config section,
+    ;; after lazily loading the package.
+    :config
+
+    ;; Optionally configure preview. The default value
+    ;; is 'any, such that any key triggers the preview.
+    ;; (setq consult-preview-key 'any)
+    ;; (setq consult-preview-key "M-.")
+    ;; (setq consult-preview-key '("S-<down>" "S-<up>"))
+    ;; For some commands and buffer sources it is useful to configure the
+    ;; :preview-key on a per-command basis using the `consult-customize' macro.
+    (consult-customize
+     consult-theme :preview-key '(:debounce 0.2 any)
+     consult-ripgrep consult-git-grep consult-grep
+     consult-bookmark consult-recent-file consult-xref
+     consult--source-bookmark consult--source-file-register
+     consult--source-recent-file consult--source-project-recent-file
+     ;; :preview-key "M-."
+     :preview-key '(:debounce 0.4 any))
+
+    ;; Optionally configure the narrowing key.
+    ;; Both < and C-+ work reasonably well.
+    (setq consult-narrow-key "<") ;; "C-+"
+
+    ;; Optionally make narrowing help available in the minibuffer.
+    ;; You may want to use `embark-prefix-help-command' or which-key instead.
+    ;; (define-key consult-narrow-map (vconcat consult-narrow-key "?") #'consult-narrow-help)
+
+    ;; By default `consult-project-function' uses `project-root' from project.el.
+    ;; Optionally configure a different project root function.
+      ;;;; 1. project.el (the default)
+    ;; (setq consult-project-function #'consult--default-project--function)
+      ;;;; 2. vc.el (vc-root-dir)
+    ;; (setq consult-project-function (lambda (_) (vc-root-dir)))
+      ;;;; 3. locate-dominating-file
+    ;; (setq consult-project-function (lambda (_) (locate-dominating-file "." ".git")))
+      ;;;; 4. projectile.el (projectile-project-root)
+    ;; (autoload 'projectile-project-root "projectile")
+    ;; (setq consult-project-function (lambda (_) (projectile-project-root)))
+      ;;;; 5. No project support
+    ;; (setq consult-project-function nil)
+    )
+
+#+end_src
+** Text handling
+#+begin_src emacs-lisp :tangle my-modules/my-editor-settings.el
+;;;; Text edit
+;; If I select something and C-y yank or start typing, then just delete the selected text.
+(delete-selection-mode 1)
+;;;; Expand region
+(use-package expand-region
+  :bind (("C-+" . er/expand-region)
+         ("C-?" . er/contract-region)
+         ))      
+
+;;;; Move text
+;; Is part of the standard Emacs package, but needs to be activated. Once activated will move selected text or the current line up/down with M-<up> M-<down>.
+(use-package move-text
+  :config
+  (move-text-default-bindings)
+  )
+
+;;;; Multiple cursors
+;; TODO maybe set some more bindings one day.
+(use-package multiple-cursors
+  :bind (;("H-SPC" . set-rectangular-region-anchor)
+         ;;("C-M-SPC" . set-rectangular-region-anchor)
+         ("C->" . mc/mark-next-like-this)
+         ("C-<" . mc/mark-previous-like-this)
+         ("C-c C-<" . mc/mark-all-like-this)
+         ("C-c C-SPC" . mc/edit-lines)
+         ))
+
+#+end_src
+** Better coding experience
+#+begin_src emacs-lisp :tangle my-modules/my-editor-settings.el
+;;;; Electric pair mode
+(electric-pair-mode 1)
+
+  
+  ;;;; Outline mode
+  ;; Built in package, that works quite nice. Maybe some day check out ts-fold based on tree-sitter: https://github.com/emacs-tree-sitter/ts-fold?tab=readme-ov-file#ts-fold
+  ;; This reddit thread have more inspiration for further keybindings.
+  (use-package outline
+    :hook (prog-mode . outline-minor-mode)
+    :config
+    (setq outline-minor-mode-use-buttons t)
+    (setq outline-minor-mode-highlight nil) ;; Check this out.
+    :bind-keymap ("C-c C-o" . outline-mode-prefix-map)
+    ;; :bind (:map outline-minor-mode-map
+    ;;             ([C-tab] . bicycle-cycle)
+    ;;             ("<backtab>" . bicycle-cycle-global))
+    )
+
+  ;; For now I have converted to outli - I think I like it better.
+  (use-package outli
+    :vc (:fetcher github
+                  :repo "jdtsmith/outli")
+    :hook ((prog-mode text-mode) . outli-mode))
+
+  (use-package ts-fold
+      :vc (:fetcher github
+                  :repo "emacs-tree-sitter/ts-fold"))
+(provide 'my-editor-settings)
+#+end_src
+* Tabs, projects and bookmarks
+#+begin_src emacs-lisp :tangle my-modules/my-workspace.el
+;;;; Writeroom mode
+;; For better focus
+(use-package writeroom-mode
+  :defer 3
+  :bind
+  ("<f8>" . 'writeroom-mode)
+  )
+
+  
+  ;;;; tabs, projects etc.
+  ;;Der er flere indbyggede pakker, som delvist overlapper.
+  ;; - desktop.el :: Kan gemme og senere hente window samt tab, og buffer åbne på et bestemt tidspunkt. Kan gøres automatisk når emacs åbnes og lukkes.
+  ;; - bookmark :: bookmark a specific file
+  ;; - project.el :: project management
+  ;; - tab-bar-mode :: Giver en slags tabs, over window layout med buffere
+  ;; - tab-line-mode :: Giver en slags tabs, over hvilke buffere som har været åbne i et enkelt vindue
+  (use-package tab-bar
+    :config
+    (setq tab-bar-select-tab-modifiers 't)
+    (tab-bar-history-mode 1)
+     )
+
+  ;;;; Bookmark plus
+  (use-package bookmark+
+    :vc (:fetcher github
+                  :repo "emacsmirror/bookmark-plus")
+    ;;		  :main "bookmark+.el")
+    :ensure t)
+(provide 'my-workspace)
+#+end_src
+* Frames and windows
+I need to think about frames and windows. Stuff like window redo, save to register etc. Also kind of emacs everywhere pop up frames with org-capture etc. 
+* Spelling
+Spelling and grammar
+#+begin_src emacs-lisp :tangle my-modules/my-spelling.el
+;;;; Spelling
+(use-package jinx
+  :hook (emacs-startup . global-jinx-mode)
+  :bind (("<f7>" . jinx-correct)
+         ("S-<f7>" . jinx-languages))
+  :init
+  (setq jinx-languages '"en_US")
+  ;; (add-to-list 'vertico-multiform-categories
+  ;;          '(jinx grid (vertico-grid-annotate . 20)))
+  ;; (vertico-multiform-mode 1)
+  )
+
+;;;; Grammar
+
+;;   Maybe also check out writegood mode
+;; There are two packages that doom emacs use for grammar checking. One of them can also be used online to check for example a manuscript.
+;; Languagetool and writegood mode.
+;; Remember to install languagetool.
+
+(use-package writegood-mode
+  :bind ("C-C g" . writegood-mode))
+
+(use-package langtool
+  :defer t)
+(setq langtool-java-classpath
+      "/usr/share/languagetool:/usr/share/java/languagetool/*")
+(bind-keys
+ :prefix-map languagetool-map
+ :prefix "C-c l")
+(bind-keys :map languagetool-map
+           ("c" . langtool-interarctive-correction)
+           ("d" . langtool-check-done)
+           ("h" . langtool-show-message-at-point)
+           ("l" . langtool-check)
+           )
+(provide 'my-spelling)
+#+end_src
+* Completion
+#+begin_src emacs-lisp :tangle my-modules/my-completion.el
+  ;;;; Completion
+  ;;;;; Embark
+  (use-package embark
+    :ensure t
+    :bind
+    (("C-." . embark-act)         ;; pick some comfortable binding
+     ("C-:" . embark-dwim)        ;; good alternative: M-.   --> Changed from C-;
+     ("C-h B" . embark-bindings)) ;; alternative for `describe-bindings'
+    :init
+    ;; Optionally replace the key help with a completing-read interface
+    (setq prefix-help-command #'embark-prefix-help-command)
+
+    ;; Show the Embark target at point via Eldoc.  You may adjust the Eldoc
+    ;; strategy, if you want to see the documentation from multiple providers.
+    (add-hook 'eldoc-documentation-functions #'embark-eldoc-first-target)
+    ;; (setq eldoc-documentation-strategy #'eldoc-documentation-compose-eagerly)
+    :config
+    ;; Hide the mode line of the Embark live/completions buffers
+    (add-to-list 'display-buffer-alist
+                 '("\\`\\*Embark Collect \\(Live\\|Completions\\)\\*"
+                   nil
+                   (window-parameters (mode-line-format . none)))))
+
+  ;; Consult users will also want the embark-consult package.
+  (use-package embark-consult
+    :ensure t ; only need to install it, embark loads it after consult if found
+    :hook
+    (embark-collect-mode . consult-preview-at-point-mode))
+
+  ;;;;; Orderless
+  ;; Optionally use the `orderless' completion style.
+  (use-package orderless
+    :init
+    ;; Configure a custom style dispatcher (see the Consult wiki)
+    ;; (setq orderless-style-dispatchers '(+orderless-consult-dispatch orderless-affix-dispatch)
+    ;;       orderless-component-separator #'orderless-escapable-split-on-space)
+    (setq completion-styles '(orderless basic)
+          completion-category-defaults nil
+          completion-category-overrides '((file (styles partial-completion)))))
+
+  ;;;;; Corfu
+  (use-package corfu
+    ;; Optional customizations
+    :custom
+    ;; (corfu-cycle t)                ;; Enable cycling for `corfu-next/previous'
+    (corfu-auto t)                    ;; Enable auto completion
+    (corfu-auto-delay 2)              ;; But wait some time when writing.
+    ;; (corfu-separator ?\s)          ;; Orderless field separator
+    ;; (corfu-quit-at-boundary nil)   ;; Never quit at completion boundary
+    ;; (corfu-quit-no-match nil)      ;; Never quit, even if there is no match
+    ;; (corfu-preview-current t)    ;; Disable current candidate preview
+    ;; (corfu-preselect 'prompt)      ;; Preselect the prompt
+    ;; (corfu-on-exact-match nil)     ;; Configure handling of exact matches
+    ;; (corfu-scroll-margin 5)        ;; Use scroll margin
+
+    ;; Show some additional Information on the candidate for selection. It doesn't work, cause there is apparently no documentation??  It works for clean code files, but not in org-mode blocks.
+
+    (corfu-popupinfo-mode 1)
+
+    ;; Remember suggestions by history
+    (corfu-history-mode 1)
+    ;; (savehist-mode 1)  ;; Allready done above.
+    (add-to-list 'savehist-additional-variables 'corfu-history)
+
+    :init
+    (setq corfu-min-width 80
+          corfu-max-width corfu-min-width       ; Always have the same width
+          corfu-count 14
+          corfu-scroll-margin 4)
+    (global-corfu-mode)
+    )
+  ;;    ;; M-  Space keeps searchiing across spaces with fuzzy. This is standard, I just put this here to remind me.
+
+  ;;;; Tab 
+  (setq-default indent-tabs-mode nil        ; Stop using tabs to indent
+                tab-always-indent 'complete       ; Use tab as tab, use another keybinding for compleation. (see Corfu)
+                tab-first-completion 'eol
+                tab-width 4)                ; Smaller width for tab characters
+  ;;;;; Cape 
+  ;; Completion libraries to use with Corfu. Expands on the dabbrev functions that are allready inside emacs. Dabbrev stands for dynamic abbreviation and looks for similar words in the same buffer and tries to see if the current word could be expanded.
+  (use-package cape
+    ;; Bind dedicated completion commands
+    ;; Alternative prefix keys: C-c p, M-p, M-+, ...
+    :bind (("C-c p p" . completion-at-point) ;; capf
+           ("C-c p t" . complete-tag)        ;; etags
+           ("C-c p d" . cape-dabbrev)        ;; or dabbrev-completion
+           ("C-c p h" . cape-history)
+           ("C-c p f" . cape-file)
+           ("C-c p k" . cape-keyword)
+           ("C-c p s" . cape-symbol)
+           ("C-c p a" . cape-abbrev)
+           ("C-c p i" . cape-ispell)
+           ("C-c p l" . cape-line)
+           ("C-c p w" . cape-dict)
+           ("C-c p \\" . cape-tex)
+           ("C-c p _" . cape-tex)
+           ("C-c p ^" . cape-tex)
+           ("C-c p &" . cape-sgml)
+           ("C-c p r" . cape-rfc1345))
+    :init
+    ;; ;; Add `completion-at-point-functions', used by `completion-at-point'.
+    (add-to-list 'completion-at-point-functions #'cape-file)
+    (add-to-list 'completion-at-point-functions #'cape-dabbrev)
+    ;;(add-to-list 'completion-at-point-functions #'cape-history)
+    (add-to-list 'completion-at-point-functions #'cape-keyword)
+    ;;(add-to-list 'completion-at-point-functions #'cape-tex)
+    ;;(add-to-list 'completion-at-point-functions #'cape-sgml)
+    ;;(add-to-list 'completion-at-point-functions #'cape-rfc1345)
+    ;;(add-to-list 'completion-at-point-functions #'cape-abbrev)
+    ;;  (add-to-list 'completion-at-point-functions #'cape-ispell)
+    ;;(add-to-list 'completion-at-point-functions #'cape-dict)
+    ;;(add-to-list 'completion-at-point-functions #'cape-symbol)
+    ;;(add-to-list 'completion-at-point-functions #'cape-line)
+    :custom
+    (setq cape-dict-file "~/.config/enchant/en_US.dic")
+    )
+
+  ;;;;; Tempel
+  (use-package tempel
+    ;; Require trigger prefix before template name when completing.
+    ;; :custom
+    ;; (tempel-trigger-prefix "<")
+
+    :bind (("M-+" . tempel-complete) ;; Alternative tempel-expand
+           ("M-*" . tempel-insert)
+           :map my-insert-map
+           ("t" . tempel-insert))
+
+    :init
+    (setq tempel-path "~/org/templates")
+
+    ;; Setup completion at point
+    (defun tempel-setup-capf ()
+      ;; Add the Tempel Capf to `completion-at-point-functions'.
+      ;; `tempel-expand' only triggers on exact matches. Alternatively use
+      ;; `tempel-complete' if you want to see all matches, but then you
+      ;; should also configure `tempel-trigger-prefix', such that Tempel
+      ;; does not trigger too often when you don't expect it. NOTE: We add
+      ;; `tempel-expand' *before* the main programming mode Capf, such
+      ;; that it will be tried first.
+      (setq-local completion-at-point-functions
+                  (cons #'tempel-expand
+                        completion-at-point-functions)))
+
+    (add-hook 'conf-mode-hook 'tempel-setup-capf)
+    (add-hook 'prog-mode-hook 'tempel-setup-capf)
+    (add-hook 'text-mode-hook 'tempel-setup-capf)
+
+    ;; Optionally make the Tempel templates available to Abbrev,
+    ;; either locally or globally. `expand-abbrev' is bound to C-x '.
+    ;; (add-hook 'prog-mode-hook #'tempel-abbrev-mode)
+    ;; (global-tempel-abbrev-mode)
+    )
+  (use-package tempel-collection
+    :ensure t
+    :after tempel
+    )
+
+  (provide 'my-completion)
+#+end_src
+* Minibuffer
+#+begin_src emacs-lisp :tangle my-modules/my-minibuffer.el
+  ;;;; Minibuffer
+  ;;;;; Vertico
+  ;; Enable vertico - Shows xx possible lines in minibuffer.
+  (use-package vertico
+    :init
+    (vertico-mode)
+    (setq vertico-cycle t
+          vertico-count-format nil ; No prefix with number of entries
+          vertico-count 7) ; Number of occurences to show in the minibuffer.
+    (add-hook 'rfn-eshadow-update-overlay-hook #'vertico-directory-tidy) ; Makes it more tidy when using ~/ completion in find-file.
+    )
+
+  ;; Persist history over Emacs restarts. Vertico sorts by history position.
+  (use-package savehist
+    :init
+    (savehist-mode))
+  ;;;;; Marginalia 
+  ;; Enable rich annotations using the Marginalia package in minibuffer.
+  (use-package marginalia
+    ;; Bind `marginalia-cycle' locally in the minibuffer.  To make the binding
+    ;; available in the *Completions* buffer, add it to the
+    ;; `completion-list-mode-map'.
+    :bind (:map minibuffer-local-map
+                ("M-A" . marginalia-cycle))
+
+    ;; The :init section is always executed.
+    :init
+    ;; Marginalia must be activated in the :init section of use-package such that
+    ;; the mode gets enabled right away. Note that this forces loading the
+    ;; package.
+    (marginalia-mode))
+
+  (provide 'my-minibuffer)
+#+end_src
+* User info
+#+begin_src emacs-lisp :tangle my-modules/my-user-info.el
+  ;; Some functionality uses this to identify you, e.g. GPG configuration, email
+  ;; clients, file templates and snippets.
+  (setq user-full-name "Kristian Bagge"
+        user-mail-address "mail@kristianbagge.com")
+  (setq org-crypt-key "mail@kristianbagge.com")
+
+  ;;; GPG & Authinfo
+  (require 'epg)
+                                          ;(setqq epg-pinentry-mode 'loopback)
+  (setq epg-user-id "mail@kristianbagge.com")
+  (setq epa-file-encrypt-to "mail@kristianbagge.com")
+  (setq epa-file-select-keys t)
+  (setq epg-gpg-home-directory "~/.config/gnupg/")
+
+  (setq epg-debug t)
+  (setq auth-source-debug t)
+  (setq auth-info-debug t)
+  ;;(setq epa-file-cache-passphrase-for-symmetric-encryption 't) ; This might save me from typing the pin on yubikey many times in the same session
+                                          ; The above solved it. I have kept the below just in case I need to experiment with it in the future.
+                                          ;(setenv "GPG_AGENT_INFO" nil) ; Make sure emacs don't use any external pinentry. Not sure if this will affect my gpg ssh setup.
+
+  ;; Emacs have a way of saving secrets in a PGP encrypted file and retrieve them later. I have set this to ~/.authinfo.gpg
+  ;; Some good sources:
+  ;; - [[https://www.masteringemacs.org/article/keeping-secrets-in-emacs-gnupg-auth-sources][Mastering emacs - auth sources]]
+  ;; - [[https://www.gnu.org/software/emacs/manual/html_mono/auth.html][Emacs manual - auth sources]]
+  ;; - [[https://github.com/daviwil/emacs-from-scratch/blob/master/show-notes/Emacs-Tips-Pass.org][Emacs from scratch - auth sources]]
+  (setq auth-sources '("~/.authinfo")
+        auth-source-cache-expiry nil) ; default is 7200 (2h)
+
+  ;; Passwords
+  (setq password-cache-expiry nil
+        password-cache t
+        plstore-cache-passphrase-for-symmetric-encryption t ; This makes org-caldav cache passwords. The default is not.
+  )
+(provide 'my-user-info)
+#+end_src
+* Org
+#+begin_src emacs-lisp :tangle my-modules/my-org-setup.el
+  ;;; Org mode
+  ;;;; Org variables
+  ;; Define new variables to call later
+  (setq +org-dir (concat (getenv "HOME") "/org/")
+        +agenda-dir (concat +org-dir "agenda/")
+        +org-image-dir "~/Library/Images/"
+        +library-notes (concat +org-dir "library-notes/")
+        +bibtex-file '("~/org/library-notes/My_Library.bib")
+        +org-projects-todo-file (concat +agenda-dir "20231227T222442--projects__agenda_projects.org")
+        +org-capture-recipies-file  (concat +org-dir "20240102T010106--kogebog__mad.org")
+        +org-capture-inbox (concat +agenda-dir "20231226T221108--inbox__agenda_inbox.org"))
+  ;; Set org-dir and org-archive location
+  (setq org-directory +org-dir
+        org-archive-location (concat +org-dir "archive.org_archive::* From %s"))
+
+  (use-package org
+    :init
+    ;; UI interface
+    (setq org-hide-emphasis-markers t)
+    (setq org-pretty-entities t)
+    (setq org-startup-indented t)
+    (setq org-pretty-entities-include-sub-superscripts nil)
+    (setq org-startup-folded "show1levels")
+    ;; Use RET to open org-mode links, including those in quick-help.org
+    (setq org-return-follows-link t)
+
+    :custom
+    (require 'org-crypt)
+    (setq org-tags-exclude-from-inheritance
+          '("crypt"))
+    (set-face-attribute 'org-table nil :inherit 'fixed-pitch) ;; Make tables use fixed pitch
+    :hook (org-mode . visual-line-mode)
+    (org-mode . variable-pitch-mode)
+    :bind
+    ("C-c c" . org-capture)
+    ("C-c a" . org-agenda)
+    (:map my-open-map
+          ("a" . org-agenda))
+    )
+
+  (use-package org-modern
+    :after org
+    :config
+    (global-org-modern-mode)
+    :init
+    ;; (setq org-modern-timestamp '(" %A, %b %e - %Y " . " %H:%M "))
+    (setq org-modern-timestamp nil)
+    (setq org-modern-block-fringe 1)
+    (setq org-modern-table nil)
+    (setq org-modern-star '("✳" "○" "◉" "◇" "◈"))
+    )
+
+  (setq org-todo-keywords
+        '((sequence
+           "TODO"  ; A task that needs doing & is ready to do
+           "STARTED(!)" ; Something I started on ! Means the time started is logged in txt.
+           "|"
+           "DONE"  ; Task successfully completed
+           "CANCELED" ; Explains itself - used before archiving.
+           )))
+
+  (setq org-todo-keyword-faces
+        '(("TODO" . org-warning) ("STARTED" . "yellow")
+          ("CANCELED" . (:foreground "blue" :weight bold))))
+
+  (setq org-tag-persistent-alist '(("work" . ?w) ("home" . ?h) ("@online" . ?o) ("@møde" . ?m) ("@errand" . ?e) ("@phone" . ?p) (:newline)
+                                   ("blocked" .?b) ("someday" .?s) (:newline)
+                                   ("anders" . ?A) ("simone" .?S) ("maria" . ?M) ))
+  (setq org-special-ctrl-a/e t)
+
+  (org-babel-do-load-languages
+   'org-babel-load-languages
+   '((emacs-lisp - t)
+     (python . t)))
+  (setq org-confirm-babel-evaluate nil)
+
+  (use-package org-pomodoro)
+  (setq org-pomodoro-manual-break t)
+
+  (use-package org-download
+    :after org
+    :init
+    (setq org-attach-id-dir (file-name-as-directory(concat +org-dir "data"))
+          org-download-image-dir +org-image-dir
+          org-image-actual-width (/ (display-pixel-width) 3) ; vil gøre alle billeders bredde svarende til 1/3 af skærmen.
+                                          ;org-image-actual-width '(300) ; vil gøre alle billeder 300 pixel bredde
+          org-startup-with-inline-images t ;; gør nok org lidt langsommere, men jeg bruger det i mange af mine noter.
+          org-link-abbrev-alist '(("image-file" . "~/Library/Images/%s")
+                                  ("wikipedia" . "https://en.wikipedia.org/wiki/%s")
+                                  ("duckduckgo" . "https://duckduckgo.com/?q=%s")
+                                  ("gmap" . "https://maps.google.com/maps?q=%s")
+                                  ("gimages" . "https://google.com/images?q=%s")
+                                  ("google" . "https://google.com/search?q=")
+                                  ("youtube" . "https://youtube.com/watch?v=%s")
+                                  ("github" . "https://github.com/%s"))
+          ))
+
+;;;; Math latex in org-mode inline
+(use-package org-fragtog
+  :custom
+  ;; Math looks small in org-mode - lets make latex fragments bagger
+  (setq org-format-latex-options (plist-put org-format-latex-options :scale 2.0))
+  :hook (org-mode . org-fragtog-mode)
+  )
+
+#+end_src
+* Org-agenda
+#+begin_src emacs-lisp :tangle my-modules/my-org-setup.el
+(use-package org-super-agenda
+  :hook (org-agenda-mode . org-super-agenda-mode))
+
+(setq org-agenda-files (directory-files-recursively +agenda-dir ".*\.org")
+      org-agenda-dim-blocked-tasks nil  ; The following are supposed to speed up org-agenda when it gets slow - see https://orgmode.org/worg/agenda-optimization.html -- check the documentation, I don't need it.
+      ;; org-agenda-inhibit-startup t   ; agenda doesnt respect folding, making it faster. <- disabled for now since it might not be neccessary.
+      org-agenda-skip-scheduled-if-done t
+      org-agenda-skip-deadline-if-done t
+      org-agenda-skip-scheduled-if-deadline-is-shown t
+      org-agenda-include-deadlines t
+      org-deadline-warning-days 7 ; for the calendar view
+      org-agenda-todo-ignore-deadline 14 ; for the todo list
+      org-agenda-todo-ignore-scheduled 7 ; use less warning days for scheduled tasks
+      org-agenda-start-day "+0d"
+      org-agenda-block-separator nil
+      org-agenda-tags-column 100 ;; from testing this seems to be a good value
+      org-agenda-compact-blocks t
+      org-log-done 'time ;; puts a time log on when an item was marked as done
+      ;;      org-agenda-hide-tags-regexp (regexp-opt '("no_roam"))
+
+      org-agenda-prefix-format ;; Remove the file coloumn in the agenda and todo view
+      '((agenda . " %i %?-12t% s")
+        (todo   . " %i %s")
+        (tags   . " %i ")
+        (search . " %i %-12:c"))
+      )
+
+;; The custom agenda command follows below - maybe one day make more for different purposes
+(setq  org-agenda-custom-commands
+       '(("o" "Overview"
+          ((agenda "" ((org-agenda-format-date (format-time-string "%A     %e %B %Y  --  (uge %W)" (current-time)))
+                       (org-agenda-span 1)
+                       (org-agenda-include-deadlines nil)
+                       (org-habit-show-habits-only-for-today nil)
+                       (org-super-agenda-groups
+                        '((:name "Today"
+                                 :time-grid t
+                                 :date today
+                                 :todo "TODO"
+                                 :scheduled past
+                                 :order 1)))))
+           (agenda "" ((org-agenda-span 1)
+                       (org-agenda-format-date "")
+                       (org-agenda-start-day "+1d")
+                       (org-habit-show-habits-only-for-today nil)
+                       (org-agenda-include-deadlines nil)
+                       (org-agenda-use-time-grid nil)
+                       (org-super-agenda-groups
+                        '((:name "Tomorrow:"
+                                 :date today
+                                 :deadline nil
+                                 :scheduled past
+                                 :order 1)))))
+           (agenda "" ((org-agenda-format-date "")
+                       (org-agenda-span 1)
+                       (org-agenda-use-time-grid nil)
+                       (org-agenda-todo-ignore-deadlines 'far)
+                       (org-super-agenda-groups
+                        '((:name "Deadlines:"
+                                 :deadline t
+                                 :discard (:anything t)
+                                 :order 1)))))
+           (alltodo "" ((org-agenda-overriding-header "")
+                        (org-agenda-tag-filter-preset '("-someday"))
+                        (org-super-agenda-groups
+                         '((:name "In Process"
+                                  :todo "STARTED"
+                                  :discard (:habit t)
+                                  :order 1)
+                           (:name "Due Today"
+                                  :deadline today
+                                  :discard (:todo "[ ]")
+                                  :order 2)
+                           (:name "Top priority"
+                                  ;;                             :tag "Important"
+                                  :priority "A"
+                                  :order 6)
+                           (:name "Quick tasks"
+                                  :and(:effort< "0:05" :not (:tag "blocked"))
+                                  :order 7)
+                           (:name "Work"
+                                  :and (:tag "work" :todo "TODO" :not (:tag "mail") :not(:tag "blocked") :not(:tag "ykm"))
+                                  :order 10)
+                           (:name "YKM"
+                                  :tag "ykm"
+                                  :order 11)
+                           (:name "Personal"
+                                  :and (:tag "me" :not (:tag "blocked"))
+                                  :order 12)
+                           (:name "Mail"
+                                  :tag "mail"
+                                  :order 13)
+                           (:name "Projects"
+                                  :and (:todo "TODO" :tag "project" :not (:tag "emacs") :not(:tag "blocked"))
+                                  :order 14)
+                           (:name "Research"
+                                  :and (:tag "research" :todo "TODO" :not(:tag "blocked"))
+                                  :order 15)
+                           (:name "To read"
+                                  :tag "read"
+                                        ;                               :todo "TODO"
+                                  :order 30)
+                           (:name "emacs"
+                                  :tag "emacs"
+                                  :order 40)
+                           (:name "Linux"
+                                  :and (:tag "arch"
+                                             :todo "TODO")
+                                  :order 50)
+                           (:name "Other items"
+                                  :not (:tag "blocked")
+                                  :order 55)
+                           (:name "Blocked Tasks"
+                                  :tag "blocked"
+                                  :order 60)
+                           ))))
+           ))))
+
+#+end_src
+* Org-capture
+#+begin_src emacs-lisp :tangle my-modules/my-org-setup.el
+  ;;; Org capture
+  (defun org-capture-select-template-prettier (&optional keys)
+    "Select a capture template, in a prettier way than default
+             Lisp programs can force the template by setting KEYS to a string."
+    (let ((org-capture-templates
+           (or (org-contextualize-keys
+                (org-capture-upgrade-templates org-capture-templates)
+                org-capture-templates-contexts)
+               '(("t" "Task" entry (file+headline "" "Tasks")
+                  "* TODO %?\n  %u\n  %a")))))
+      (if keys
+          (or (assoc keys org-capture-templates)
+              (error "No capture template referred to by \"%s\" keys" keys))
+        (org-mks org-capture-templates
+                 "Select a capture template\n━━━━━━━━━━━━━━━━━━━━━━━━━"
+                 "Template key: "
+                 `(("q" ,(concat (propertize "" 'font-lock-face '(:foreground "red"))  "\tAbort")))))))
+  (advice-add 'org-capture-select-template :override #'org-capture-select-template-prettier)
+
+  (defun org-mks-pretty (table title &optional prompt specials)
+    "Select a member of an alist with multiple keys. Prettified.
+
+             TABLE is the alist which should contain entries where the car is a string.
+             There should be two types of entries.
+
+             1. prefix descriptions like (\"a\" \"Description\")
+                This indicates that `a' is a prefix key for multi-letter selection, and
+                that there are entries following with keys like \"ab\", \"ax\"…
+
+             2. Select-able members must have more than two elements, with the first
+                being the string of keys that lead to selecting it, and the second a
+                short description string of the item.
+
+             The command will then make a temporary buffer listing all entries
+             that can be selected with a single key, and all the single key
+             prefixes.  When you press the key for a single-letter entry, it is selected.
+             When you press a prefix key, the commands (and maybe further prefixes)
+             under this key will be shown and offered for selection.
+
+             TITLE will be placed over the selection in the temporary buffer,
+             PROMPT will be used when prompting for a key.  SPECIALS is an
+             alist with (\"key\" \"description\") entries.  When one of these
+             is selected, only the bare key is returned."
+    (save-window-excursion
+      (let ((inhibit-quit t)
+            (buffer (org-switch-to-buffer-other-window "*Org Select*"))
+            (prompt (or prompt "Select: "))
+            case-fold-search
+            current)
+        (unwind-protect
+            (catch 'exit
+              (while t
+                (erase-buffer)
+                (insert title "\n\n")
+                (let ((des-keys nil)
+                      (allowed-keys '("\C-g"))
+                      (tab-alternatives '("\s" "\t" "\r"))
+                      (cursor-type nil))
+                  ;; Populate allowed keys and descriptions keys
+                  ;; available with CURRENT selector.
+                  (let ((re (format "\\`%s\\(.\\)\\'"
+                                    (if current (regexp-quote current) "")))
+                        (prefix (if current (concat current " ") "")))
+                    (dolist (entry table)
+                      (pcase entry
+                        ;; Description.
+                        (`(,(and key (pred (string-match re))) ,desc)
+                         (let ((k (match-string 1 key)))
+                           (push k des-keys)
+                           ;; Keys ending in tab, space or RET are equivalent.
+                           (if (member k tab-alternatives)
+                               (push "\t" allowed-keys)
+                             (push k allowed-keys))
+                                          ;                                (insert prefix "[" k "]" "..." "  " desc "..." "\n"))) ;; original
+                           (insert prefix " " k " " "..." "  " desc "..." "\n"))) ;; My version
+                                          ;                           (insert (propertize prefix 'face 'font-lock-comment-face) (propertize k 'face 'bold) (propertize " ›" 'face 'font-lock-comment-face) "  " desc "…" "\n"))) ;; teco version
+                        ;; Usable entry.
+                        (`(,(and key (pred (string-match re))) ,desc . ,_)
+                         (let ((k (match-string 1 key)))
+                                          ;                                          (insert prefix "[" k "]" "     " desc "\n") ;; original
+                           (insert prefix " " k " " "     " desc "\n") ;; My version
+                                          ;                            (insert (propertize prefix 'face 'font-lock-comment-face) (propertize k 'face 'bold) "   " desc "\n")
+                           (push k allowed-keys))) ;; teco version
+                        (_ nil))))
+                  ;; Insert special entries, if any.
+                  (when specials
+                    (insert "─────────────────────────\n")
+                    (pcase-dolist (`(,key ,description) specials)
+                                          ;              (insert (format "%s   %s\n" (propertize key 'face '(bold nerd-icons-red)) description)) ;; teco version
+                                          ;                                       (insert (format "[%s]     %s\n" key description)) ;; original
+                      (insert (format " %s      %s\n" key description)) ;; My version
+                      (push key allowed-keys)))
+                  ;; Display UI and let user select an entry or
+                  ;; a sub-level prefix.
+                  (goto-char (point-min))
+                  (unless (pos-visible-in-window-p (point-max))
+                    (org-fit-window-to-buffer))
+                  (let ((pressed (org--mks-read-key allowed-keys
+                                                    prompt
+                                                    (not (pos-visible-in-window-p (1- (point-max)))))))
+                    (setq current (concat current pressed))
+                    (cond
+                     ((equal pressed "\C-g") (user-error "Abort"))
+                     ;; Selection is a prefix: open a new menu.
+                     ((member pressed des-keys))
+                     ;; Selection matches an association: return it.
+                     ((let ((entry (assoc current table)))
+                        (and entry (throw 'exit entry))))
+                     ;; Selection matches a special entry: return the
+                     ;; selection prefix.
+                     ((assoc current specials) (throw 'exit current))
+                     (t (error "No entry available")))))))
+          (when buffer (kill-buffer buffer))))))
+  (advice-add 'org-mks :override #'org-mks-pretty)
+
+  (use-package org-project
+    :vc (:fetcher github
+                  :repo "delehef/org-project")
+
+    :after org)
+
+
+  ;; Change the name of the heading in my project.org file, and add a tag with the name of the project.
+  (defun org-project--build-heading (projectpath)
+    "Create an org heading for PROJECTPATH."
+    (let* ((raw-heading (org-project--name-from-project projectpath))
+           (heading-linkized (if org-project-link-heading
+                                 ;;     (org-project--linkize-heading raw-heading projectpath) ;; original
+                                 (org-project--linkize-heading projectpath projectpath) ;; my version - that gives full path instead of only name of dir.
+                               raw-heading))
+           (heading-final (concat heading-linkized " :" raw-heading ":"))) ;; My version - that adds a tag with the project dir name.
+      ;;        (heading-final heading-linkized)) ;; original
+      heading-final))
+
+
+  ;; If invoked outside of a project, prompt for a valid project to capture for
+  (setq org-project-prompt-for-project t) ;; Maybe this tries to call org-project when opening?
+
+  ;; Store all TODOs in a ORG_DIRECTORY/project.org
+  (setq org-project-todos-per-project nil)
+  (setq org-project-todos-file +org-projects-todo-file)
+
+  ;; Use custom capture templates
+  (setq org-project-capture-template "* TODO %? \n%t\n") ;; Ask for a TODO and a date
+  ;; (setq org-project-quick-capture-template "* TODO %? %(org-insert-time-stamp (org-read-date nil t \"+2d\"))\n") ;; Quick TODOs ae scheduled in two days
+
+  ;; Add some binding for org-project in project.el map
+  (bind-keys :map project-prefix-map
+             ("t" . org-project-quick-capture)
+             ("T" . org-project-capture)
+             ("o" . org-project-open-todos))
+
+  (setq org-capture-templates `(("a" " interesting Article" entry (file ,(concat +org-dir "daily/" (format-time-string "%Y-%m-%d.org")))
+                                 "* %? :read:article:\n[[id:b57b817b-a5a5-4c98-9f95-068de01a66ea][Reading list]]")
+                                ("t" " Personal todo" entry (file +org-capture-inbox)
+                                 "* TODO %?\n%i %a")
+                                ("n" " Quick note" entry (file+headline ,(concat +org-dir "daily/" (format-time-string "%Y-%m-%d.org")) "Notes")
+                                 "* %?\n%i %a")
+                                ("e" " Email" entry (file+headline +org-capture-inbox "Tasks")
+                                 "* TODO Send email til %\\1 %? :mail:\nSend email til %^{modtager} vedr. %^{vedrørende}\n%U %i %a  ")
+                                ("l" " Link" entry (file+headline ,(concat +org-dir "Bookmarks.org") "Unsorted")
+                                 "* %? [[%:link][%(transform-square-brackets-to-round-ones \"%:description\")]] \nCaptured On: %U")
+                                ;; ("i" " Interesting") 
+                                ;; ("ii" " Idea" entry (file+headline ,(concat +org-dir "daily/" (format-time-string "%Y-%m-%d.org")) "Notes")
+                                ;;  "* %? :idea:\n#[[id:0f3c3087-aab5-408a-b47f-20f3fb7c0f7e][Inbox]]")
+                                ;; ("p" " Projects")
+                                ;; ("pt" " Project todo" entry (file+headline +org-projects-todo-file ,(org-project--build-heading (org-project--current-project))))
+                                ;;                     "* TODO %?\n%i %a")
+                                ;;    ("pn" " Project note" entry (file+headline ,(concat (org-project--current-project) "notes.org") "Notes")
+                                ;;    "* %?\n%i %a" :unnarrowed t)
+                                ))
+
+  (setq org-refile-targets '(("/home/bagge/org/agenda/20231226T221108--inbox__agenda_inbox.org"  :maxlevel . 3)
+                             ("/home/bagge/org/agenda/20231226T220621--organizer__agenda_metanote_organizer.org" :maxlevel . 3)
+                             ("/home/bagge/org/agenda/20231227T222442--projects__agenda_projects.org" :maxlevel . 3)
+                             (nil :maxlevel . 3)))
+  ;; I also want to be able to set refiles in at a topline level
+  (setq org-refile-use-outline-path 'file) ; Allow refiling to files
+  (setq org-outline-path-complete-in-steps nil) ; But not only to files, we still want headings.
+  (setq org-refile-allow-creating-parent-nodes 'confirm) ; Allow to refile to non-existent headings.
+
+(provide 'my-org-setup)
+#+end_src
+
+* Denote
+#+begin_src emacs-lisp :tangle my-modules/my-denote-setup.el
+  ;;; Denote
+  (unless (package-installed-p 'denote)
+    (package-install 'denote))
+
+  ;; Denote
+  (use-package denote
+    :init
+    (require 'denote-org-extras)
+    (require 'denote-journal-extras)
+    (denote-rename-buffer-mode t)
+    (setq denote-journal-extras-title-format 'day-date-month-year)
+    :custom
+    (denote-directory "~/org/")
+
+    :hook
+    (dired-mode . denote-dired-mode)
+    :custom-face
+    (denote-faces-link ((t (:slant italic))))
+    :bind (:map my-notes-map
+                ("n" . denote-create-note)
+                ("j" . denote-journal-extras-new-or-existing-entry)
+                ("i" . denote-link-or-create)
+                ("f" . denote-open-or-create)
+                ("l" . denote-find-link)
+                ("b" . denote-find-backlink)
+                ("D" . denote-org-dblock-insert-links)
+                ("r" . denote-rename-file-using-front-matter)
+                ("R" . denote-rename-file)
+                ("s" . denote-subdirectory)
+                ("S" . my-denote-region-subdirectory)
+                ("k" . denote-keywords-add)
+                ("K" . denote-keywords-remove))
+  )
+
+  (defun my/denote-copy-todo-to-today ()
+    (interactive)
+    (let ((org-refile-keep nil) ;; Set this to nil to delete the original!
+          (org-after-refile-insert-hook #'save-buffer)
+          today-file
+          pos)
+      (save-window-excursion
+        (denote-journal-extras-new-or-existing-entry)
+        (setq today-file (buffer-file-name))
+        (setq pos (point)))
+
+      ;; Only refile if the target file is different than the current file
+      (unless (equal (file-truename today-file)
+                     (file-truename (buffer-file-name)))
+        (org-refile nil nil (list "Tasks:" today-file nil pos)))))
+
+  (add-to-list 'org-after-todo-state-change-hook
+               (lambda ()
+                 (when (equal org-state "DONE")
+                   (my/denote-copy-todo-to-today))))
+
+  (use-package consult-denote
+    :init
+    (consult-denote-mode 1)
+    )
+
+  (provide 'my-denote-setup)
+#+end_src
+
+* Citar
+#+begin_src emacs-lisp :tangle my-modules/my-citar-setup.el
+  ;;; Citar
+  (use-package citar
+    :bind (:map org-mode-map
+                ("C-c b" . org-cite-insert)
+                (:map my-insert-map
+                      ("b" . org-cite-insert)))
+    :custom
+    (citar-bibliography '("~/bib/references.bib"))
+    (defvar citar-indicator-files-icons
+      (citar-indicator-create
+       :symbol (nerd-icons-faicon
+                "nf-fa-file_pdf_o"
+                :face 'nerd-icons-green
+                :v-adjust -0.05)
+       :function #'citar-has-files
+       :padding "  " ; need this because the default padding is too low for these icons
+       :tag "has:files"))
+
+    (defvar citar-indicator-links-icons
+      (citar-indicator-create
+       :symbol (nerd-icons-codicon
+                "nf-cod-link"
+                :face 'nerd-icons-orange
+                :v-adjust 0.01)
+       :function #'citar-has-links
+       :padding "  "
+       :tag "has:links"))
+
+    (defvar citar-indicator-notes-icons
+      (citar-indicator-create
+       :symbol (nerd-icons-codicon
+                "nf-cod-notebook"
+                :face 'nerd-icons-blue
+                :v-adjust -0.05)
+       :function #'citar-has-notes
+       :padding "  "
+       :tag "has:notes"))
+
+    (defvar citar-indicator-cited-icons
+      (citar-indicator-create
+       :symbol (nerd-icons-faicon
+                "nf-fa-quote_right"
+                :face 'nerd-icons-green)
+       :function #'citar-is-cited
+       :padding "  "
+       :tag "is:cited"))
+
+    (setq citar-indicators
+          (list citar-indicator-files-icons
+                citar-indicator-links-icons
+                citar-indicator-notes-icons
+                citar-indicator-cited-icons))
+    :hook
+    (LaTeX-mode . citar-capf-setup)
+    (org-mode . citar-capf-setup)
+    :init
+    (setq org-cite-global-bibliography +bibtex-file
+          org-cite-insert-processor 'citar
+          org-cite-follow-processor 'citar
+          org-cite-activate-processor 'citar
+          org-cite-csl-styles-dir "~/Zotero/styles"
+          citar-bibliography org-cite-global-bibliography
+          notes-paths (if (stringp +library-notes) (list +library-notes) +library+notes)
+          ))
+
+  (unless (package-installed-p 'citar-embark)
+    (package-install 'citar-embark))
+
+  (use-package citar-embark
+    :after citar embark
+    :no-require
+    :init
+    ;; Open embark with enter.
+    (setq citar-at-point-function 'embark-act)
+    :config (citar-embark-mode))
+
+  (unless (package-installed-p 'citar-denote)
+    (package-install 'citar-denote))
+
+  (use-package citar-denote
+    :custom
+    ;; Allow multiple notes per bibliographic entry
+    (citar-open-always-create-notes nil)
+    ;; Use package defaults
+    (citar-denote-file-type 'org)
+    (citar-denote-subdir nil)
+    (citar-denote-signature nil)
+    (citar-denote-template nil)
+    (citar-denote-keyword "bib")
+    (citar-denote-use-bib-keywords nil)
+    (citar-denote-title-format "title")
+    (citar-denote-title-format-authors 1)
+    (citar-denote-title-format-andstr "and")
+    :init
+    (citar-denote-mode)
+    ;; Bind all available commands
+    :bind (("C-c w c" . citar-create-note)
+           ("C-c w n" . citar-denote-open-note)
+           ("C-c w d" . citar-denote-dwim)
+           ("C-c w e" . citar-denote-open-reference-entry)
+           ("C-c w a" . citar-denote-add-citekey)
+           ("C-c w k" . citar-denote-remove-citekey)
+           ("C-c w r" . citar-denote-find-reference)
+           ("C-c w l" . citar-denote-link-reference)
+           ("C-c w f" . citar-denote-find-citation)
+           ("C-c w x" . citar-denote-nocite)
+           ("C-c w y" . citar-denote-cite-nocite)))
+
+  (provide 'my-citar-setup)
+#+end_src
+
+* Office
+** Mail
+Setup with isync, mu4e, mu4e-consult ...
+Some blogs about setting up mu4e with protonmail
+https://shom.dev/posts/20220108_setting-up-protonmail-in-emacs/
+The best one -> https://gist.github.com/A6GibKm/238b754a4a90051f60906b9efa3e8000
+
+Remember to run:
+mu init --maildir=mail/ --my-address='mail@kristianbagge.com' --my-address='register@kristianbagge.com' --my-address='kontor@kristianbagge.com' --my-address='work@kristianbagge.com'
+Then afterwards:
+mu index
+*** Mbsync
+Remember to actively export the cert from within the bridge application
+Isync = mbsync conf
+#+begin_src bash :tangle ~/.local/share/chezmoi/dot_mbsyncrc.tmpl
+  IMAPAccount proton
+  Host 127.0.0.1
+  Port 1143
+  User kristianbagge@protonmail.com
+  Pass "{{ pass "chezmoi/protonmail/bridge" }}"
+  TLSType STARTTLS
+  CertificateFile ~/.config/protonmail/bridge-v3/cert.pem
+
+
+  IMAPStore proton-remote
+  Account proton
+
+  MaildirStore proton-local
+  Subfolders Verbatim
+  Path ~/mail/proton/
+  Inbox ~/mail/proton/inbox
+
+  Channel proton
+  Far :proton-remote:
+  Near :proton-local:
+  Patterns *
+  Create Both
+  SyncState *
+  Expunge both
+
+#+end_src
+*** Mu4e
+#+begin_src emacs-lisp :tangle my-modules/my-mu4e.el
+  (use-package mu4e
+    :load-path  "/usr/local/share/emacs/site-lisp/mu/mu4e/"
+    :config
+
+    (setq mu4e-change-filenames-when-moving t ; avoid sync conflicts
+        mu4e-update-interval (* 10 60) ; check mail 10 minutes
+        mu4e-compose-format-flowed t ; re-flow mail so it's not hard wrapped
+        mu4e-get-mail-command "mbsync -a"
+        mu4e-maildir "~/mail/")
+
+    (setq mu4e-drafts-folder "/proton/Drafts"
+        mu4e-sent-folder   "/proton/Sent"
+        mu4e-refile-folder "/proton/Archive"
+        mu4e-trash-folder  "/proton/Trash")
+
+    (setq mu4e-maildir-shortcuts
+        '(("/proton/inbox"     . ?i)
+          ("/proton/Sent"      . ?s)
+          ("/proton/Trash"     . ?t)
+          ("/proton/Drafts"    . ?d)
+          ("/proton/Archive"  . ?a)))
+
+    (setq message-send-mail-function 'smtpmail-send-it
+        auth-sources '("~/.authinfo") ;need to use gpg version but only local smtp stored for now
+        smtpmail-smtp-server "127.0.0.1"
+        smtpmail-smtp-service 1025
+        smtpmail-stream-type  'starttls)
+
+    (add-to-list 'gnutls-trustfiles (expand-file-name "~/.config/protonmail/bridge/cert.pem")))
+
+  (provide 'my-mu4e)
+#+end_src
+** Calendar
+The following code contain danish holidays and locale settings. Thanks to Søren Lund for the module.
+#+begin_src emacs-lisp :tangle my-modules/my-office-setup.el
+;; dk-kalendar.el -*- lexical-binding: t; -*-
+
+;;; da-kalender.el --- Danish calendar for Emacs -*-coding:utf-8-*-
+
+;; Copyright (c) 2018 Søren Lund <soren@lund.org>
+
+;; Author: Søren Lund <soren@lund.org>
+;; Version: 1.2
+;; Keywords: calendar danish localization
+
+;; This file is not part of GNU Emacs.
+
+;; This program is free software; you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation; either version 3 of the License, or
+;; (at your option) any later version.
+;;
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+;;
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+;;; Commentary:
+
+;; Danish calendar localization. This is my version of the swedish
+;; localization, sv-kalender.el, by Daniel Jensen - see
+;; http://bigwalter.net/daniel/elisp/sv-kalender.el
+
+;; This file will modify how Emacs displays its calendar. The names of
+;; months, days, etc. have been replaced with danish
+;; translations. Furthermore the default american holidays are
+;; replaced by danish holidays.
+
+;; To use it, save this file somewhere in your load-path and add (load
+;; "da-kalender") to your ~/.emacs file.
+
+;;; History
+
+;; 1.0 - Initial release (Mar 25th, 2010)
+;; 1.1 - Added week numbers (Feb 13th, 2014)
+;; 1.2 - Fixed to work with newer version of Emacs (Sep 24th, 2018)
+
+;; My own adaption for sunrise sunset for Copenhagen
+(setq calendar-latitude 55.676098)
+(setq calendar-longitude 12.568337)
+(setq calendar-location-name "København, Danmark")
+
+
+;;; Code:
+
+;; Week starts on monday
+(setq calendar-week-start-day 1)
+
+;; Use european date style, i.e. date/month
+(setq european-calendar-style 'european)
+
+;; Date format
+(setq calendar-date-display-form
+      '((if dayname
+            (concat dayname ", "))
+        day " " monthname " " year))
+
+;; 24 hour clock format
+(setq calendar-time-display-form
+      '(24-hours ":" minutes))
+
+;; Weekday names
+(setq calendar-day-name-array
+      ["søndag" "mandag" "tirsdag" "onsdag" "torsdag" "fredag" "lørdag"])
+(setq calendar-day-abbrev-array
+      ["søn" "man" "tirs" "ons" "tors" "fre" "lør"])
+(setq calendar-day-header-array
+      ["sø" "ma" "ti" "on" "to" "fr" "lø"])
+
+;(setq url-weekday-alist '(("Søndag" . 0) ("Mandag" . 1) ("Tirsdag" . 2) ("Onsdag" .3) ("Torsdag" . 4) ("Fredag" . 5) ("Lørdag" . 6))) ; Jeg ved ikke om dette gør noget, har selv tilføkget det.
+
+
+;; Month names
+(setq calendar-month-name-array
+      ["januar" "februar" "marts" "april" "maj" "juni"
+       "juli" "august" "september" "oktober" "november" "december"])
+(setq calendar-month-abbrev-array
+      ["jan" "feb" "mar" "apr" "maj" "jun" "jul" "aug" "sep" "okt" "nov" "dec"])
+
+:; Equinoxes/solstices names
+;; http://www.dmi.dk/dmi/nyd_aarets_laengste_dag_-_sommersolhverv
+(eval-after-load "solar"
+  '(progn
+     (setq solar-n-hemi-seasons
+	   '("Forårsjævndøgn" "Sommersolhverv"
+	     "Efterårsjævndøgn" "Vintersolhverv"))
+     (setq solar-s-hemi-seasons
+	   '("Efterårsjævndøgn" "Vintersolhverv"
+	     "Forårsjævndøgn" "Sommersolhverv"))))
+
+;; Moon phace names
+(defadvice lunar-phase-name (around da-lunar-phase-name activate)
+  "Phases of the moon in danish."
+  (setq ad-return-value
+	(let ((phase (ad-get-arg 0)))
+	  (cond ((= 0 phase) "Nymåne 🌑")
+		((= 1 phase) "Tiltagende Halvmåne 🌓")
+		((= 2 phase) "Fuldmåne 🌕")
+		((= 3 phase) "Aftagende Halvmåne 🌗")))))
+
+
+;; Sunrise and sunset
+(defadvice solar-sunrise-sunset-string (around da-solar-sunrise-sunset-string
+                                               activate)
+  "Sunrise and sunset in danish."
+  (setq ad-return-value
+        (let ((l (solar-sunrise-sunset date)))
+          (format
+           "%s, %s i %s (%s timers dagslys)"
+           (if (car l)
+               (concat "Sol op " (apply 'solar-time-string (car l)))
+             "Ingen solopgang")
+           (if (car (cdr l))
+               (concat "ned " (apply 'solar-time-string (car (cdr l))))
+       "ingen solnedgang")
+           (eval calendar-location-name)
+           (car (cdr (cdr l)))))))
+
+
+;; Show week number
+;; Adapted from http://stackoverflow.com/questions/21364948/how-to-align-the-calendar-with-week-number-as-the-intermonth-text
+(setq calendar-intermonth-text
+      '(propertize
+        (format "%2d"
+                (car
+                 (calendar-iso-from-absolute
+                  (calendar-absolute-from-gregorian (list month day year)))))
+        'font-lock-face 'font-lock-doc-face))
+
+;; Week numbers are very common and there's no two-letter abreviation for it,
+;; Thus I'm not added a header. It could be added using this (ug=ugenummer):
+;;
+;; (setq calendar-intermonth-header nil)
+;;       (propertize "un" 'font-lock-face 'font-lock-keyword-face))
+
+
+;; Calculation of easter, the fix point for many holidays (taken from
+;; sv-kalender.el, originally from holiday-easter-etc)
+(defun da-easter (year)
+  "Calculate the date for Easter in YEAR."
+  (let* ((century (1+ (/ year 100)))
+         (shifted-epact (% (+ 14 (* 11 (% year 19))
+                              (- (/ (* 3 century) 4))
+                              (/ (+ 5 (* 8 century)) 25)
+                              (* 30 century))
+                           30))
+         (adjusted-epact (if (or (= shifted-epact 0)
+                                 (and (= shifted-epact 1)
+                                      (< 10 (% year 19))))
+                             (1+ shifted-epact)
+                           shifted-epact))
+         (paschal-moon (- (calendar-absolute-from-gregorian
+                           (list 4 19 year))
+                          adjusted-epact)))
+    (calendar-dayname-on-or-before 0 (+ paschal-moon 7))))
+
+(setq general-holidays
+      '((holiday-fixed 1 1 "Nytårsdag")
+	(holiday-fixed 1 6 "Hellige 3 konger")
+
+	;; Easter and Pentecost
+	(holiday-filter-visible-calendar
+	 (mapcar
+	  (lambda (dag)
+	    (list (calendar-gregorian-from-absolute
+		   (+ (da-easter displayed-year) (car dag)))
+		  (cadr dag)))
+	  '(( -49 "Fastelavn")
+	    (  -7 "Palmesøndag")
+	    (  -3 "Skærtorsdag")
+	    (  -2 "Langfredag")
+	    (   0 "Påskedag")
+	    (  +1 "Anden påskedag")
+	    ( +26 "Store bededag")
+	    ( +39 "Kristi himmelfartsdag")
+	    ( +49 "Pinsedag")
+	    ( +50 "Anden pinsedag"))))
+
+	(holiday-fixed 12 24 "Juleaften")
+	(holiday-fixed 12 25 "Juledag")
+	(holiday-fixed 12 26 "Anden juledag")
+	(holiday-fixed 12 31 "Nytårsaften")))
+
+(setq other-holidays
+      '((holiday-fixed 3 8 "Kvindernes internationale kampdag")
+	(holiday-fixed 5 1 "Arbejdernes internationale kampdag")
+	(holiday-fixed 5 4 "Danmarks befrielse")
+	(holiday-float 5 0 2 "Mors dag")
+	(holiday-fixed 6 5 "Grundlovsdag")
+	(holiday-fixed 6 5 "Fars dag")
+	(holiday-fixed 6 15 "Valdemarsdag (Dannebrog)")
+	(holiday-fixed 6 24 "Skt. Hans dag")))
+
+(setq calendar-holidays
+      (append general-holidays other-holidays))
+
+;; da-kalender.el ends here
+
+#+end_src
+** Pdf-tools
+#+begin_src emacs-lisp :tangle my-modules/my-office-setup.el
+  ;;; Pdf-tools
+  (use-package pdf-tools
+    :magic ("%PDF" . pdf-view-mode)
+    :config
+    (pdf-tools-install)
+    (setq pdf-view-use-scaling t)
+    )
+(provide 'my-office-setup)
+#+end_src
+** Elfeed
+#+begin_src emacs-lisp :tangle my-modules/my-elfeed.el
+    ;;; Office
+      ;;;; Elfeed
+
+  (use-package elfeed
+    :defer t
+    :custom
+    (setq-default elfeed-search-filter "@1-week-ago +unread ")
+    ;; Entries older than 2 weeks are marked as read
+    (add-hook 'elfeed-new-entry-hook
+              (elfeed-make-tagger :before "2 weeks ago"
+                                  :remove 'unread))
+    ;; Dual pane
+    (setq elfeed-show-entry-switch #'elfeed-display-buffer)
+
+    (defun elfeed-display-buffer (buf &optional act)
+      (pop-to-buffer buf)
+      (set-window-text-height (get-buffer-window) (round (* 0.7 (frame-height)))))
+
+    ;; Easy tagging
+    (defun elfeed-tag-selection-as (mytag)
+      "Returns a function that tags an elfeed entry or selection as
+            MYTAG"
+      (lambda ()
+        "Toggle a tag on an Elfeed search selection"
+        (interactive)
+        (elfeed-search-toggle-all mytag)))
+
+    ;; Tag with a single letter keybind:
+
+    (define-key elfeed-search-mode-map "l" (elfeed-tag-selection-as 'readlater))
+    (define-key elfeed-search-mode-map "d" (elfeed-tag-selection-as 'junk))
+
+    ;; Open links without browser
+    (defun elfeed-show-eww-open (&optional use-generic-p)
+      "open with eww"
+      (interactive "P")
+      (let ((browse-url-browser-function #'eww-browse-url))
+        (elfeed-show-visit use-generic-p)))
+
+    (defun elfeed-search-eww-open (&optional use-generic-p)
+      "open with eww"
+      (interactive "P")
+      (let ((browse-url-browser-function #'eww-browse-url))
+        (elfeed-search-browse-url use-generic-p)))
+
+    (define-key elfeed-show-mode-map (kbd "B") 'efleed-show-eww-open)
+    (define-key elfeed-search-mode-map (kbd "B") 'efleed-search-eww-open)
+
+    ;; Youtube in mpv
+    (setq browse-url-browser-function
+          '(("https:\\/\\/www\\.youtu\\.*be." . browse-url-mpv)
+            ("." . browse-url-generic)))
+
+    (defun browse-url-mpv (url &optional single)
+      (start-process "mpv" nil "mpv" (shell-quote-argument url)))
+    )
+
+  ;;  (use-package elfeed-web)
+
+  (use-package elfeed-org
+    :commands elfeed
+    :custom
+    (rmh-elfeed-org-files (list "~/org/20240101T172750--elfeed__elfeed.org")))
+
+  (provide 'my-elfeed)
+#+end_src
+** Pocket reader
+#+begin_src emacs-lisp :tangle my-modules/my-pocket.el
+  ;;;; Pocket reader
+  (use-package pocket-reader
+    )
+(provide 'my-pocket)
+#+end_src
+* Programming
+#+begin_src emacs-lisp :tangle my-modules/my-programming-setup.el
+    ;;; Programming
+    ;;;; Highlight indents
+    ;; Maybe this would be better under editor, I'll think about it.
+    (use-package highlight-indent-guides
+      :hook (prog-mode-hook . highlight-indent-guides-mode))
+
+    ;;;; Direnv mode
+    ;; Enables direnv to set $Path and env correct for dev venv's
+    (use-package direnv
+      :config
+      (direnv-mode))
+
+
+    ;;;; Eglot
+    (use-package eglot
+      :hook
+      (python-ts-mode-hook . eglot-ensure))
+
+                                            ; (straight-use-package 'consult-glot)
+                                            ; (require 'consult-eglot)
+
+    (use-package treesit-auto :ensure t)
+    ;; treesit grammar should be installed here: "~/.emacs.d/tree-sitter/"
+
+
+  ;;;; Vterm
+  ;; I have switched to eat from vterm. It is a bee wit slower, but does not flicker.
+  (use-package eat
+    :bind (:map my-open-map
+                ("<return>" . 'eat)))
+  ;; https://www.reddit.com/r/emacs/comments/1dab1b0/how_to_run_a_command_in_an_existing_eat_terminal/   <- Might use this to use pixi in eat terminal for sending python code.
+
+  (provide 'my-programming-setup)
+
+#+end_src
+** Python
+#+begin_src emacs-lisp :tangle my-modules/my-python.el
+;;;; Python
+;; Some nice resources:
+;; - [[https://www.adventuresinwhy.com/post/eglot/][Eglot + treesitter in emacs (python)]]
+;; - [[https://gist.github.com/habamax/290cda0e0cdc6118eb9a06121b9bc0d7][Same but other source]]
+;; - [[https://www.masteringemacs.org/article/how-to-get-started-tree-sitter][Mastering emacs on treesitter]]
+
+(setq major-mode-remap-alist
+      '((python-mode . python-ts-mode)))
+
+;; Remember to install pyright
+ (use-package lsp-pyright ; Server for eglot.
+   :hook (python-ts-mode . (lambda ()
+                          (require 'lsp-pyright))))
+
+;;(add-hook 'python-mode-hook 'eglot-ensure)
+;;  (add-to-list 'eglot-server-programs
+;;               '(python-ts-mode . ("ruff" "server")))
+;;  (add-hook 'after-save-hook 'eglot-format))
+
+;; https://docs.astral.sh/ruff/editors/setup/#emacs
+(use-package flymake-ruff
+  :ensure t
+  :hook (python-ts-mode . flymake-ruff-load))
+
+(use-package ruff-format
+  :ensure t
+  :hook (python-ts-mode . ruff-format-on-save-mode))
+
+
+;; See comments here on reddit:
+;; https://www.reddit.com/r/emacs/comments/17g1jw3/what_is_yours_configuration_for_python/
+;; (use-package conda
+;;   :defer t
+;;   :init
+;;   (setq conda-anaconda-home "~/.mambaforge/")
+;; ;; ----- select interpreter
+
+(setq python-shell-interpreter "ipython"
+      python-shell-interpreter-arg " -i --simple-prompt --InteractiveShell.display_page=True"
+      python-shell-completion-native-enable nil)
+
+;; )
+
+;; ----- emacs-jupyter
+;; Disabled since it did not work right
+;;  (use-package jupyter
+;; ;;   :init
+;; ;;   (setq jupyter-use-zmq nil)
+;;    ;; :commands
+;;    ;; (jupyter-run-server-repl
+;;    ;;  jupyter-run-repl
+;;    ;;  jupyter-server-list-kernels)
+;;    :custom
+;;    (jupyter-executable "/.pixi run jupyter kernel")
+;;    )
+;;  ;;(org-babel-jupyter-override-src-block "python") ;; so python becomes jupyter-python in org-babel
+
+(provide 'my-python)
+#+end_src
+** Chezmoi
+#+begin_src emacs-lisp :tangle my-modules/my-chezmoi.el
+;;;; Chezmoi dotfile management
+(use-package chezmoi
+  )
+(provide 'my-chezmoi)
+#+end_src
+** Latex
+#+begin_src emacs-lisp :tangle my-modules/my-latex.el
+  ;;;; Latex
+  ;; Some options to highlight faces for latex export:
+  (use-package engrave-faces
+    :init
+    (setq org-latex-src-block-backend 'engraved)
+    (setq org-latex-engraved-theme 'doom-one-light)
+    (setq org-format-latex-options (plist-put org-format-latex-options :scale 1.6)))
+
+  (provide 'my-latex)
+#+end_src
+** Git
+#+begin_src emacs-lisp :tangle my-modules/my-git.el
+  ;;;; Magit
+  ;; Maybe check out forge at some point to interact with github.
+  ;; and git-timemachine: https://codeberg.org/pidu/git-timemachine
+  (use-package magit
+
+    :init
+    (setq vc-follow-symlinks t) ;; Since I track my init file with git, I don't need a warning every time I open emacs.
+    :defer t)
+
+  (provide 'my-git)
+
+#+end_src
+** LLM
+Remember the .tmpl ending is due to chezmoi injecting sensitive information.
+#+begin_src emacs-lisp :tangle my-modules/my-llm.el.tmpl
+  ;;;; LLM
+  ;; Resources:
+  ;; - [[https://emacsconf.org/2023/talks/llm/][Emacs talk on LLM]]
+  ;; - [[https://www.reddit.com/r/emacs/comments/18s45of/every_llm_in_emacs_with_gptel/][GPTel video]]
+  ;; - [[https://github.com/jart/emacs-copilot][Emacs co-pilot]]
+  ;; - [[https://brianlovin.com/hn/38822164][Another input on co-pilot]]
+  ;; - [[https://github.com/ahyatt/llm][LLM package]]
+  (use-package gptel
+    :config
+    (gptel-make-kagi "Kagi"                    ;any name
+      :key "{{ pass "chezmoi/kagi/api" }}")
+    (gptel-make-ollama "Ollama"             ;Any name of your choosing
+      :host "localhost:11434"               ;Where it's running
+      :stream t                             ;Stream responses
+      :models '("mistral:latest"))
+    )
+
+  (provide 'my-llm)
+#+end_src
+* Archive
+#+begin_src emacs-lisp
+  ;;; Not used at the moment
+  ;;;; R language
+  ;; Install lintr [[https://github.com/r-lib/lintr][here]]. And the languageserver for R - [[https://github.com/REditorSupport/languageserver][here]].
+  ;; Also install some dependencies for the languageserver: (check instructions on the languageserver page in case it changes.
+  ;; dnf install --assumeyes --setopt=install_weak_deps=False @development-tools libcurl-devel libxml2-devel openssl-devel R
+  ;; (use-package ess
+  ;;     :defer t)
+  ;;   (autoload #'R "ess")
+
+  ;; Setup Latex at som point - maybe markdown aswell
+  ;;; Inspiration from here: https://jakebox.github.io/youtube/org_latex_video.html
+  ;; (with-eval-after-load 'ox-latex
+  ;; (add-to-list 'org-latex-classes
+  ;;              '("org-plain-latex"
+  ;;                "\\documentclass{article}
+  ;;            [NO-DEFAULT-PACKAGES]
+  ;;            [PACKAGES]
+  ;;            [EXTRA]"
+  ;;                ("\\section{%s}" . "\\section*{%s}")
+  ;;                ("\\subsection{%s}" . "\\subsection*{%s}")
+  ;;                ("\\subsubsection{%s}" . "\\subsubsection*{%s}")
+  ;;                ("\\paragraph{%s}" . "\\paragraph*{%s}")
+  ;;                ("\\subparagraph{%s}" . "\\subparagraph*{%s}"))))
+
+
+  ;;; Future inspiration:
+  ;;;; - https://github.com/armindarvish/consult-omni
+
+#+end_src

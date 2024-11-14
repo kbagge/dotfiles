@@ -1,0 +1,24 @@
+IMAPAccount proton
+Host 127.0.0.1
+Port 1143
+User kristianbagge@protonmail.com
+Pass "{{ pass "chezmoi/protonmail/bridge" }}"
+TLSType STARTTLS
+CertificateFile ~/.config/protonmail/bridge-v3/cert.pem
+
+
+IMAPStore proton-remote
+Account proton
+
+MaildirStore proton-local
+Subfolders Verbatim
+Path ~/mail/proton/
+Inbox ~/mail/proton/inbox
+
+Channel proton
+Far :proton-remote:
+Near :proton-local:
+Patterns *
+Create Both
+SyncState *
+Expunge both

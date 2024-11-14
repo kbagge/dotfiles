@@ -1,0 +1,89 @@
+;;;; No warning for 80 char docstrin
+  (setq native-comp-async-report-warnings-errors 'silent)
+
+;;;; Custom file
+(setq custom-file (concat user-emacs-directory "custom.el"))
+(when (file-exists-p custom-file)
+  (load custom-file))
+;;;; Handling files
+(setq confirm-nonexistent-file-or-buffer nil
+      create-lockfiles nil)
+
+;; Kill current buffer (instead of asking first buffer name)
+(bind-key "C-x k" 'kill-current-buffer)
+
+;; Give normal names to files in buffer list
+(setq uniquify-buffer-name-style 'forward)
+
+;; remember recent files
+(add-hook 'after-init-hook #'recentf-mode)
+(setq recentf-max-saved-items 250)
+(bind-key "C-x C-r" 'consult-recent-file)
+
+;;;; Shortcut for config and server
+;; First let's make a function for opening a specific file, so we can call it with leader key. Weekday avoid using lampda so we have a nice name for which-key to show.
+(defun open-emacs-config () (interactive) (find-file "~/.local/share/chezmoi/dot_config/emacs/config.org"))
+(defun connect-to-server () (interactive) (find-file "/ssh:server@server.kristianbagge.com:")) ;; For now this opens up dired in ~/ folder on server by using TRAMP.
+;; Bind it
+(bind-key "C" 'open-emacs-config my-open-map)
+(bind-key "S" 'connect-to-server my-open-map)
+
+;;;; Sudo this file
+;; My try at a function that sudo this file
+(defun sudo-this-file (file-name)
+  "Like find file, but opens the file as root."
+  (interactive "FSudo Find File: ")
+  (let ((tramp-file-name (concat "/sudo::" (expand-file-name file-name))))
+    (find-file tramp-file-name)))
+(bind-key "s" 'sudo-this-file my-open-map)
+
+(setq backup-directory-alist       ; File name patterns and backup directory names.
+      `(("." . ,(expand-file-name "backups" user-emacs-directory)))
+      make-backup-files t          ; Backup of a file the first time it is saved.
+      vc-make-backup-files t       ; No backup of files under version contr
+      backup-by-copying t          ; Don't clobber symlinks
+      version-control t            ; Version numbers for backup files
+      delete-old-versions t        ; Delete excess backup files silently
+      kept-old-versions 4          ; Number of old versions to keep
+      kept-new-versions 7          ; Number of new versions to keep
+      delete-by-moving-to-trash t) ; Delete files to trash
+
+(setq auto-save-list-file-prefix ; Prefix for generating auto-save-list-file-name
+      (expand-file-name ".auto-save-list/.saves-" user-emacs-directory)
+      auto-save-default t        ; Auto-save every buffer that visits a file
+      auto-save-timeout 20       ; Number of seconds between auto-save
+      auto-save-interval 200)    ; Number of keystrokes between auto-saves
+(setq auto-save-file-name-transforms
+      `((".*" "~/.config/emacs/.auto-saves/" t))) ; Make a folder for autosaves instead of cluttering all my folders.
+
+;;;; Pop up windows
+(use-package popper
+  :ensure t ; or :straight t
+  :bind (("C-`"   . popper-toggle)
+         ("M-`"   . popper-cycle)
+         ("C-M-`" . popper-toggle-type))
+  :init
+  (setq popper-reference-buffers
+        '("\\*Messages\\*"
+          "Output\\*$"
+          "\\*Async Shell Command\\*"
+          help-mode
+          compilation-mode))
+  (popper-mode +1)
+  (popper-echo-mode +1))                ; For echo area hints
+
+;;;; No beep 
+(setq ring-bell-function #'ignore
+      visible-bell nil)
+(blink-cursor-mode -1)
+
+;;;; Y or N, not yes or no
+(setq use-short-answers t)
+                                        ;  (defalias 'yes-or-no-p 'y-or-n-p)
+;;;; Repeat mode (nice for C-x o)
+(repeat-mode 1)
+;;;; A simple frame title
+(setq frame-title-format '(" %b"))
+
+
+  (provide 'my-defaults)

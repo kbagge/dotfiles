@@ -1,0 +1,18 @@
+;;;; LLM
+;; Resources:
+;; - [[https://emacsconf.org/2023/talks/llm/][Emacs talk on LLM]]
+;; - [[https://www.reddit.com/r/emacs/comments/18s45of/every_llm_in_emacs_with_gptel/][GPTel video]]
+;; - [[https://github.com/jart/emacs-copilot][Emacs co-pilot]]
+;; - [[https://brianlovin.com/hn/38822164][Another input on co-pilot]]
+;; - [[https://github.com/ahyatt/llm][LLM package]]
+(use-package gptel
+  :config
+  (gptel-make-kagi "Kagi"                    ;any name
+    :key "{{ pass "chezmoi/kagi/api" }}")
+  (gptel-make-ollama "Ollama"             ;Any name of your choosing
+    :host "localhost:11434"               ;Where it's running
+    :stream t                             ;Stream responses
+    :models '("mistral:latest"))
+  )
+
+(provide 'my-llm)
