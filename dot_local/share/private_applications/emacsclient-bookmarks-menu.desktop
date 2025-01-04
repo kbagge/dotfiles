@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Emacs Bookmark menu
+GenericName=Emacs Bookmark menu
+Comment=Bookmark menu from anywhere
+Categories=Toolbox;System;Utility
+Exec=SHELL=/bin/zsh /usr/bin/toolbox run -c fedora_main emacsclient -e '(yequake-toggle "bookmark menu")'
+Icon=emacs
+Keywords=toolbox;
+Type=Application

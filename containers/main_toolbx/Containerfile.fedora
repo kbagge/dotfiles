@@ -1,0 +1,48 @@
+FROM registry.fedoraproject.org/fedora-toolbox:41 AS fedora-toolbox
+
+LABEL com.github.containers.toolbox="true" \
+      summary="My CLI and emacs environment build on fedora"
+
+ENV XDG_CACHE_HOME=/var/home/bagge/.cache \
+    XDG_CONFIG_HOME=/var/home/bagge/.config \
+    XDG_DATA_HOME=/var/home/bagge/.local/share \
+    XDG_STATE_HOME=/var/home/bagge/.local/state \
+    ZDOTDIR=/var/home/bagge/.config/zsh \
+    GNUPGHOME=/var/home/bagge/.config/gnupg \
+    PATH=/var/home/bagge/.pixi/bin:/var/home/bagge/.local/bin:$PATH
+
+COPY ./packages.fedora /tmp/toolbox-packages
+
+RUN dnf -y upgrade && \
+    dnf -y install $(<tmp/toolbox-packages) && \
+    dnf clean all
+
+RUN dnf install -y https://github.com/twpayne/chezmoi/releases/download/v2.54.0/chezmoi-2.54.0-x86_64.rpm
+
+
+
+RUN curl -sS https://starship.rs/install.sh -o /tmp/install.sh
+RUN sh /tmp/install.sh --yes
+RUN cp /usr/local/bin/starship /usr/sbin/starship
+
+# Install RPMFusion for hardware accelerated encoding/decoding
+RUN dnf install -y \
+    "https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" \
+    "https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm" && \
+    dnf install -y \
+    intel-media-driver 
+RUN    dnf clean all
+
+RUN ln -s /usr/local/bin/host-spawn /usr/local/bin/flatpak
+  RUN ln -s /usr/local/bin/host-spawn /usr/local/bin/podman
+  RUN ln -s /usr/local/bin/host-spawn /usr/local/bin/toolbox
+  RUN ln -s /usr/local/bin/host-spawn /usr/local/bin/rpm-ostree
+
+# RUN ln -s /usr/local/bin/host-spawn /usr/local/bin/xdg-open
+  # Does not work - see https://github.com/containers/toolbox/issues/291
+RUN dnf -y install flatpak-xdg-utils
+RUN dnf -y remove xdg-utils
+RUN ln -s /usr/bin/flatpak-xdg-open /usr/bin/xdg-open
+
+# Cleanup
+RUN rm -rf /tmp/*

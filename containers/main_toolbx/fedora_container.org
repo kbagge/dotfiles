@@ -1,0 +1,186 @@
+#+title: Litterate config for my fedora cli + emacs build
+
+#+begin_src dockerfile :tangle Containerfile.fedora
+FROM registry.fedoraproject.org/fedora-toolbox:41 AS fedora-toolbox
+
+LABEL com.github.containers.toolbox="true" \
+      summary="My CLI and emacs environment build on fedora" 
+#+end_src
+
+* TODO's
+** TODO Starship in bash
+
+* Set Environment
+#+begin_src dockerfile :tangle Containerfile.fedora
+  ENV XDG_CACHE_HOME=/var/home/bagge/.cache \
+      XDG_CONFIG_HOME=/var/home/bagge/.config \
+      XDG_DATA_HOME=/var/home/bagge/.local/share \
+      XDG_STATE_HOME=/var/home/bagge/.local/state \
+      ZDOTDIR=/var/home/bagge/.config/zsh \
+      GNUPGHOME=/var/home/bagge/.config/gnupg \
+      PATH=/var/home/bagge/.pixi/bin:/var/home/bagge/.local/bin:$PATH
+#+end_src
+* Packages
+#+begin_src dockerfile :tangle Containerfile.fedora
+  COPY ./packages.fedora /tmp/toolbox-packages
+
+  RUN dnf -y upgrade && \
+      dnf -y install $(<tmp/toolbox-packages) && \
+      dnf clean all
+#+end_src
+
+** Emacs
+#+begin_src bash :tangle packages.fedora
+  emacs
+#+end_src
+** Spelling
+#+begin_src bash :tangle packages.fedora
+    enchant
+    hunspell
+#+end_src
+** Mail utils
+#+begin_src bash :tangle packages.fedora
+    maildir-utils
+    isync
+#+end_src
+** PDF, latex, etc
+#+begin_src bash :tangle packages.fedora
+  pandoc-cli
+  biber
+  texlive-scheme-basic
+  automake
+  libpng-devel
+  poppler-devel
+  poppler-glib-devel
+  zlib-devel
+  #+end_src
+** Command line
+  #+begin_src bash :tangle packages.fedora
+    zsh
+    ripgrep
+    fd-find
+    fzf
+    bat
+    lsd
+    btop
+    htop
+    direnv
+    just
+    gettext-envsubst
+#+end_src
+** Python tools
+#+begin_src bash :tangle packages.fedora
+ruff
+#+end_src
+** Essentials
+#+begin_src bash :tangle packages.fedora
+  dnf-plugins-core
+  pass
+  host-spawn
+#+end_src
+
+** What ublue has in their image
+#+begin_src bash
+  # * Below what ublue is using on their image
+  # dnf5
+  # bash-completion
+  # bc
+  # bzip2
+  # curl
+  # diffutils
+  # dnf-plugins-core
+  # findutils
+  # fish
+  # glibc-all-langpacks
+  # glibc-locale-source
+  # gnupg2
+  # gnupg2-smime
+  # hostname
+  # iproute
+  # iputils
+  # keyutils
+  # krb5-libs
+  # less
+  # lsof
+  # man-db
+  # man-pages
+  # mtr
+  # ncurses
+  # nss-mdns
+  # openssh-clients
+  # pam
+  # passwd
+  # pigz
+  # pinentry
+  # procps-ng
+  # rsync
+  # shadow-utils
+  # sudo
+  # tcpdump
+  # time
+  # traceroute
+  # tree
+  # tzdata
+  # unzip
+  # util-linux
+  # vte-profile
+  # wget
+  # which
+  # whois
+  # words
+  # xorg-x11-xauth
+  # xz
+  # zip
+  # mesa-dri-drivers
+  # mesa-vulkan-drivers
+  # vulkan
+  # zsh
+  # vim
+  # ripgrep
+#+end_src
+* Chezmoi
+Moved to bootstrap on a new machine. Is available in .local/bin
+Have to be updated manually by copying rpm prebuild link here:
+https://www.chezmoi.io/install/#__tabbed_7_2
+#+begin_src dockerfile
+RUN dnf install -y https://github.com/twpayne/chezmoi/releases/download/v2.54.0/chezmoi-2.54.0-x86_64.rpm
+#+end_src
+* Starship
+#+begin_src dockerfile :tangle Containerfile.fedora
+  RUN curl -sS https://starship.rs/install.sh -o /tmp/install.sh
+  RUN sh /tmp/install.sh --yes
+  RUN cp /usr/local/bin/starship /usr/sbin/starship
+#+end_src
+* RPM fusion
+#+begin_src dockerfile :tangle Containerfile.fedora
+# Install RPMFusion for hardware accelerated encoding/decoding
+RUN dnf install -y \
+    "https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" \
+    "https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm" && \
+    dnf install -y \
+    intel-media-driver 
+RUN    dnf clean all
+
+#+end_src
+
+* Switch to ZSH
+I have switched to doing this by profile selection in ptyxis and by changing the .desktop files for emacs. Resulted easier.
+
+* Host-spawn certain commands
+#+begin_src dockerfile :tangle Containerfile.fedora
+      RUN ln -s /usr/local/bin/host-spawn /usr/local/bin/flatpak
+      RUN ln -s /usr/local/bin/host-spawn /usr/local/bin/podman
+      RUN ln -s /usr/local/bin/host-spawn /usr/local/bin/toolbox
+      RUN ln -s /usr/local/bin/host-spawn /usr/local/bin/rpm-ostree
+
+      # RUN ln -s /usr/local/bin/host-spawn /usr/local/bin/xdg-open
+      # Does not work - see https://github.com/containers/toolbox/issues/291
+      RUN dnf -y install flatpak-xdg-utils
+#+end_src
+* Clean up
+
+#+begin_src dockerfile :tangle Containerfile.fedora
+# Cleanup
+RUN rm -rf /tmp/*
+#+end_src
+

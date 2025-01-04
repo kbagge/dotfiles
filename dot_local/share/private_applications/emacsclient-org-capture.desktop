@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=OrgCapture
+GenericName=Org Capture
+Comment=Org Capture from anywhere
+Categories=Toolbox;System;Utility
+Exec=SHELL=/bin/zsh /usr/bin/toolbox run -c fedora_main emacsclient -e '(yequake-toggle "org-capture")'
+Icon=emacs
+Keywords=toolbox;
+Type=Application

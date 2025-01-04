@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Emacs URL Save
+GenericName= Emacs URL Save
+Comment=Save bookmarks from anywhere
+Categories=Toolbox;System;Utility
+Exec=SHELL=/bin/zsh /usr/bin/toolbox run -c fedora_main emacsclient -e '(present-save-bookmark-frame)'
+Icon=emacs
+Keywords=toolbox;
+Type=Application

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Emacs URL Jump
+GenericName= Emacs URL Jump
+Comment=Access bookmarks from anywhere
+Categories=Toolbox;System;Utility
+Exec=SHELL=/bin/zsh /usr/bin/toolbox run -c fedora_main emacsclient -e '(present-open-bookmark-frame)'
+Icon=emacs
+Keywords=toolbox;
+Type=Application

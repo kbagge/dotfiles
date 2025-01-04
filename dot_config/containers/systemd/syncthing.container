@@ -1,0 +1,33 @@
+# Systemd unit for podman container with syncthing running on boot
+[Unit]
+Description=A syncthing container
+#After=  # Podman automatically adds an after to wait for network, when creating service file
+
+[Container]
+Image=docker.io/syncthing/syncthing:latest
+AutoUpdate=registry    
+# Don't make a new network for the container
+Network=host
+# Make synchting able to add folders from my home
+UserNS=keep-id:uid=1000,gid=1000       
+Volume=%h/.config/syncthing:/var/syncthing/config:z
+
+
+# Folders to share
+# Volume=%h/Bitwig\ Studio:/var/syncthing/BitwigStudio:z
+ Volume=%h/Documents:/var/syncthing/Documents:z
+ Volume=%h/Library:/var/syncthing/Library:z
+ Volume=%h/Music:/var/syncthing/Music:z
+ Volume=%h/org:/var/syncthing/org:z
+ Volume=%h/Pictures:/var/syncthing/Pictures:z
+ Volume=%h/Projects:/var/syncthing/Projects:z
+ Volume=%h/Videos:/var/syncthing/Videos:z
+ Volume=%h/Zotero:/var/syncthing/Zotero:z
+
+# Dot folders
+ Volume=%h/.local/share/chezmoi:/var/syncthing/Chezmoi_config:z
+  Volume=%h/Library:/var/syncthing/Password_store:z
+
+[Install]
+# Start by default on boot
+WantedBy=default.target

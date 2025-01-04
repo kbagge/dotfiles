@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Emacs Daemon
+GenericName=Start Emacs on fedora toolbox
+Categories=Toolbox;System;Utility
+Exec=SHELL=/bin/zsh /usr/bin/toolbox run -c fedora_main emacs --daemon
+Icon=emacs
+Keywords=toolbox;
+Type=Application

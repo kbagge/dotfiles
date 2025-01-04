@@ -1,0 +1,14 @@
+# Justfile
+set shell := ["bash", "-uc"]
+
+# Build the project
+build:
+    buildah build -t fedora_main Containerfile.fedora
+    toolbox create -i fedora_main
+
+# clean, purge and make a new container
+rebuild:
+    toolbox rm fedora_main --force
+    buildah build -t fedora_main Containerfile.fedora
+    toolbox create -i fedora_main
+
